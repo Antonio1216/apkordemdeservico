@@ -33,14 +33,16 @@ jobs:
           from pathlib import Path
           root=Path('ospro-eletrica-software')
           j=root/'app/src/main/assets/app.js'
-          s=j.read_text()
-          s=s.replace('signName.value=a?.name||pendingSignNames[activeRole]||signSuggestedName();signName.readOnly=!!a;\\n    displaySignature(a?.image||null);updateSignButtons();'.replace('\\n','\n'), 'signName.value=a?.name||pendingSignNames[activeRole]||signSuggestedName();\\n    signName.readOnly=!!a;\\n    displaySignature(a?.image||null);\\n    updateSignButtons();'.replace('\\n','\n'))
+          s=j.read_text();nl=chr(10)
+          old='signName.value=a?.name||pendingSignNames[activeRole]||signSuggestedName();signName.readOnly=!!a;'+nl+'    displaySignature(a?.image||null);updateSignButtons();'
+          new='signName.value=a?.name||pendingSignNames[activeRole]||signSuggestedName();'+nl+'    signName.readOnly=!!a;'+nl+'    displaySignature(a?.image||null);'+nl+'    updateSignButtons();'
+          s=s.replace(old,new)
           j.write_text(s)
           k=root/'app/src/main/java/br/com/ospro/ordens/MainActivity.kt'
           s=k.read_text()
           needle='        img(obj.optString("image"),245f,83f)'
           if 'if(obj.optString("name").isNotBlank())field("Nome declarado"' not in s:
-              s=s.replace(needle,needle+'\\n        if(obj.optString("name").isNotBlank())field("Nome declarado",obj.optString("name"))'.replace('\\n','\n'))
+              s=s.replace(needle,needle+nl+'        if(obj.optString("name").isNotBlank())field("Nome declarado",obj.optString("name"))')
           k.write_text(s)
           PY
             base64 --decode scripts/apply-v1-2.py.gz.b64 | gzip -dc > /tmp/update-ospro.py
