@@ -121,8 +121,7 @@ s=change(s,"setForm($('#settings-form'),db.settings);syncOrderForm();renderAll()
 s=change(s,"window.OSProVersion = '1.4.0';","window.OSProVersion = '1.5.0';")
 if not s.rstrip().endswith('})();'):
     raise RuntimeError('Final da inicialização JS inesperado')
-s=s.rstrip()[:-5]+'});\
-'
+s=s.rstrip()[:-5]+'});'+chr(10)
 js.write_text(s,encoding='utf-8')
 s=gradle.read_text(encoding='utf-8')
 s=change(s,'versionCode = 4','versionCode = 5')
