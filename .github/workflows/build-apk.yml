@@ -1,4 +1,4 @@
-name: Gerar APK Android ACR Suporte em T.I v1.4
+name: Gerar APK Android ACR Suporte em T.I v1.5
 on:
   push:
     branches: [main]
@@ -24,7 +24,7 @@ jobs:
       - name: Aplicar melhorias v1.2
         shell: bash
         run: |
-          if ! grep -Eq "OSProVersion = '(1\\.2\\.0|1\\.3\\.0|1\\.4\\.0)'" ospro-eletrica-software/app/src/main/assets/app.js; then
+          if ! grep -Eq "OSProVersion = '(1\\.2\\.0|1\\.3\\.0|1\\.4\\.0|1\\.5\\.0|1\\.5\\.0)'" ospro-eletrica-software/app/src/main/assets/app.js; then
             if ! grep -q 'id="sign-name"' ospro-eletrica-software/app/src/main/assets/index.html; then
               base64 --decode scripts/apply-signature-name.py.gz.b64 | gzip -dc > /tmp/apply-name.py
               python /tmp/apply-name.py
@@ -57,7 +57,7 @@ jobs:
       - name: Aplicar assinatura remota e PDF v1.3
         shell: bash
         run: |
-          if ! grep -Eq "OSProVersion = '(1\\.3\\.0|1\\.4\\.0)'" ospro-eletrica-software/app/src/main/assets/app.js; then
+          if ! grep -Eq "OSProVersion = '(1\\.3\\.0|1\\.4\\.0|1\\.5\\.0)'" ospro-eletrica-software/app/src/main/assets/app.js; then
             base64 --decode scripts/v1.3-server-patch.tgz.b64 > /tmp/ospro-v13.tar.gz
           echo '2ccafcebdc351173157ae0aba81a35fcb822ef095cc5be2989e0fa3db01445ae  /tmp/ospro-v13.tar.gz' | sha256sum -c -
           tar -xzf /tmp/ospro-v13.tar.gz -C ospro-eletrica-software
@@ -78,7 +78,7 @@ jobs:
       - name: Aplicar identidade ACR v1.4
         shell: bash
         run: |
-          if grep -q "OSProVersion = '1.4.0'" ospro-eletrica-software/app/src/main/assets/app.js; then
+          if grep -Eq "OSProVersion = '(1\\.4\\.0|1\\.5\\.0)'" ospro-eletrica-software/app/src/main/assets/app.js; then
             echo "Identidade ACR já faz parte do código-fonte."
             echo "OSPRO_BRAND_BUNDLED=1" >> "$GITHUB_ENV"
           else
