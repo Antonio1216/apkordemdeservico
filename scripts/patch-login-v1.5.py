@@ -119,6 +119,10 @@ s=change(s,"if(!confirm('Confirma a exclusão deste cadastro?'))return;db[type]=
 s=change(s,"db=back.db;save();setForm($('#settings-form'),db.settings);","db=back.db;db.users||=[];syncAuthUsers();save();setForm($('#settings-form'),db.settings);")
 s=change(s,"setForm($('#settings-form'),db.settings);syncOrderForm();renderAll();renderLogo();applyPrefs();","setForm($('#settings-form'),db.settings);syncOrderForm();updatePermissions();renderAll();renderLogo();applyPrefs();")
 s=change(s,"window.OSProVersion = '1.4.0';","window.OSProVersion = '1.5.0';")
+if not s.rstrip().endswith('})();'):
+    raise RuntimeError('Final da inicialização JS inesperado')
+s=s.rstrip()[:-5]+'});\
+'
 js.write_text(s,encoding='utf-8')
 s=gradle.read_text(encoding='utf-8')
 s=change(s,'versionCode = 4','versionCode = 5')
