@@ -88,7 +88,7 @@ jobs:
             echo "OSPRO_BRAND_BUNDLED=0" >> "$GITHUB_ENV"
           fi
           node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q "OSProVersion = '1.4.0'" ospro-eletrica-software/app/src/main/assets/app.js
+          grep -Eq "OSProVersion = '(1\\.4\\.0|1\\.5\\.0)'" ospro-eletrica-software/app/src/main/assets/app.js
           grep -q 'ACR Suporte em T.I' ospro-eletrica-software/app/src/main/assets/index.html
           test -s ospro-eletrica-software/app/src/main/assets/brand/acr-logo.jpg
           test -s ospro-eletrica-software/app/src/main/assets/brand/acr-mark.jpg
@@ -99,6 +99,14 @@ jobs:
         run: |
           if grep -q "OSProVersion = '1.5.0'" ospro-eletrica-software/app/src/main/assets/app.js; then
             echo "Login v1.5 já incorporado ao código-fonte."
+            python - <<'PY'
+          from pathlib import Path
+          p=Path('ospro-eletrica-software/app/src/main/assets/app.js')
+          s=p.read_text()
+          if s.rstrip().endswith('})();'):
+              p.write_text(s.rstrip()[:-5]+'});'+chr(10))
+              print('Corrigida inicialização de login herdada')
+          PY
           else
             cp scripts/auth-v1.5.js ospro-eletrica-software/app/src/main/assets/auth.js
             python scripts/patch-login-v1.5.py ospro-eletrica-software
