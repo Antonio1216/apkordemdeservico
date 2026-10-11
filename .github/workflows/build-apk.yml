@@ -25,6 +25,24 @@ jobs:
         shell: bash
         run: |
           if ! grep -q "OSProVersion = '1.2.0'" ospro-eletrica-software/app/src/main/assets/app.js; then
+            if ! grep -q 'id="sign-name"' ospro-eletrica-software/app/src/main/assets/index.html; then
+              base64 --decode scripts/apply-signature-name.py.gz.b64 | gzip -dc > /tmp/apply-name.py
+              python /tmp/apply-name.py
+            fi
+            python - <<'PY'
+          from pathlib import Path
+          root=Path('ospro-eletrica-software')
+          j=root/'app/src/main/assets/app.js'
+          s=j.read_text()
+          s=s.replace('signName.value=a?.name||pendingSignNames[activeRole]||signSuggestedName();signName.readOnly=!!a;\\n    displaySignature(a?.image||null);updateSignButtons();'.replace('\\n','\n'), 'signName.value=a?.name||pendingSignNames[activeRole]||signSuggestedName();\\n    signName.readOnly=!!a;\\n    displaySignature(a?.image||null);\\n    updateSignButtons();'.replace('\\n','\n'))
+          j.write_text(s)
+          k=root/'app/src/main/java/br/com/ospro/ordens/MainActivity.kt'
+          s=k.read_text()
+          needle='        img(obj.optString("image"),245f,83f)'
+          if 'if(obj.optString("name").isNotBlank())field("Nome declarado"' not in s:
+              s=s.replace(needle,needle+'\\n        if(obj.optString("name").isNotBlank())field("Nome declarado",obj.optString("name"))'.replace('\\n','\n'))
+          k.write_text(s)
+          PY
             base64 --decode scripts/apply-v1-2.py.gz.b64 | gzip -dc > /tmp/update-ospro.py
             python /tmp/update-ospro.py
           fi
