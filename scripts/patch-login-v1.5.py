@@ -21,8 +21,8 @@ s=change(s,'<body>',"""<body class="auth-locked">
       <form id="auth-setup" class="auth-form" hidden>
         <label>Nome completo do administrador <input name="nome" type="text" maxlength="140" autocomplete="name" required></label>
         <label>Usuário de acesso <input name="login" type="text" minlength="3" maxlength="32" autocapitalize="none" autocomplete="username" required></label>
-        <label>Senha (mínimo 10 caracteres) <input name="senha" type="password" minlength="10" maxlength="128" autocomplete="new-password" required></label>
-        <label>Confirmar senha <input name="confirmar" type="password" minlength="10" maxlength="128" autocomplete="new-password" required></label>
+        <label>Senha (mínimo 6 caracteres) <input name="senha" type="password" minlength="6" maxlength="128" autocomplete="new-password" required></label>
+        <label>Confirmar senha <input name="confirmar" type="password" minlength="6" maxlength="128" autocomplete="new-password" required></label>
         <button type="submit" class="primary">Criar administrador e entrar</button>
       </form>
       <form id="auth-login" class="auth-form" hidden>
@@ -38,7 +38,7 @@ s=change(s,'<span id="clock" class="subtle"></span>','<span id="active-user-name
 old='<label>Função <select name="perfil"><option value="Técnico">Técnico</option><option value="Administrador">Administrador</option><option value="Atendimento">Atendimento</option></select></label>'
 s=change(s,old,old+"""
         <label>Login de acesso * <input name="login" minlength="3" maxlength="32" required autocapitalize="none" autocomplete="off" placeholder="ex.: maria.ti"></label>
-        <label>Senha <input name="senha" type="password" minlength="10" maxlength="128" autocomplete="new-password" placeholder="Obrigatória no primeiro cadastro"></label>""")
+        <label>Senha <input name="senha" type="password" minlength="6" maxlength="128" autocomplete="new-password" placeholder="Obrigatória no primeiro cadastro"></label>""")
 s=change(s,'O cadastro registra perfis, mas esta edição local não implementa login multiusuário nem sincronização entre dispositivos.','Apenas administradores criam acessos. Ao editar, deixe a senha vazia para mantê-la. Os logins são locais e não são sincronizados entre aparelhos.')
 s=change(s,'Exporte dados locais em JSON. As fotos anexadas ficam no banco de imagens local e são incluídas no backup.','Exporte os dados locais em JSON. As fotos são incluídas; contas e senhas NÃO entram no backup.')
 s=change(s,'<script src="app.js" defer></script>','<script src="auth.js" defer></script>\n  <script src="app.js" defer></script>')
