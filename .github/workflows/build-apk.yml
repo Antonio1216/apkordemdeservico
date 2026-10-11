@@ -124,8 +124,6 @@ jobs:
           from pathlib import Path
           root=Path("ospro-eletrica-software")
           changes=[
-            ("app/src/main/assets/auth.js","String(p).length<10","String(p).length<6"),
-            ("app/src/main/assets/auth.js","de 10 a 128 caracteres","de 6 a 128 caracteres"),
             ("app/src/main/assets/index.html","mínimo 10 caracteres","mínimo 6 caracteres"),
             ("app/src/main/assets/index.html",'minlength="10"','minlength="6"'),
             ("app/build.gradle.kts","versionCode = 5","versionCode = 6"),
@@ -139,9 +137,14 @@ jobs:
                   p.write_text(s.replace(old,new),encoding="utf-8")
               elif new not in s:
                   raise RuntimeError(f"Versao inesperada em {relative}: {old}")
-          auth=(root/"app/src/main/assets/auth.js").read_text()
+          auth_path=root/"app/src/main/assets/auth.js"
+          auth=auth_path.read_text(encoding="utf-8")
+          auth=auth.replace("String(p).length<10","String(p).length<6")
+          auth=auth.replace("str.length<10","str.length<6")
+          auth=auth.replace("de 10 a 128 caracteres","de 6 a 128 caracteres")
+          auth_path.write_text(auth,encoding="utf-8")
           html=(root/"app/src/main/assets/index.html").read_text()
-          assert "String(p).length<6" in auth and "de 6 a 128 caracteres" in auth
+          assert "length<6" in auth and "6 a 128 caracteres" in auth
           assert html.count('minlength="6"') >= 3 and "mínimo 6 caracteres" in html
           print("Validador de seis caracteres e formularios atualizados.")
           PY
