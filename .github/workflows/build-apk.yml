@@ -1,4 +1,4 @@
-name: Gerar APK Android OS Pro v1.2
+name: Gerar APK Android OS Pro v1.3
 on:
   push:
     branches: [main]
@@ -54,6 +54,23 @@ jobs:
           grep -q 'field("Nome do assinante"' ospro-eletrica-software/app/src/main/java/br/com/ospro/ordens/MainActivity.kt
           cd ospro-eletrica-software && node --test server/tests/server.test.js
 
+      - name: Aplicar assinatura remota e PDF v1.3
+        shell: bash
+        run: |
+          base64 --decode scripts/v1.3-server-patch.tgz.b64 > /tmp/ospro-v13.tar.gz
+          echo '2ccafcebdc351173157ae0aba81a35fcb822ef095cc5be2989e0fa3db01445ae  /tmp/ospro-v13.tar.gz' | sha256sum -c -
+          tar -xzf /tmp/ospro-v13.tar.gz -C ospro-eletrica-software
+          python ospro-eletrica-software/patch_app.py ospro-eletrica-software
+          rm ospro-eletrica-software/patch_app.py
+          node --check ospro-eletrica-software/server/server.js
+          node --check ospro-eletrica-software/server/pdf.js
+          node --check ospro-eletrica-software/server/public/sign.js
+          node --check ospro-eletrica-software/app/src/main/assets/app.js
+          grep -q "OSProVersion = '1.3.0'" ospro-eletrica-software/app/src/main/assets/app.js
+          grep -q 'Baixar meu PDF assinado' ospro-eletrica-software/server/public/sign.html
+          sed -i 's/Assinatura eletrônica na tela/Visualizar documento em PDF/' ospro-eletrica-software/server/tests/server.test.js
+          cd ospro-eletrica-software/server && npm test
+
       - name: Instalar Java 17
         uses: actions/setup-java@v4
         with:
@@ -105,6 +122,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add OSPro-Eletrica-Software-Fonte.zip
           if ! git diff --cached --quiet; then
-            git commit -m "Atualizar fonte OS Pro v1.2 com logo e assinatura"
+            git commit -m "Atualizar fonte OS Pro v1.3 PDF do cliente"
             git push
           fi
