@@ -22,7 +22,7 @@ async function hash(password,hex){
  return Array.from(new Uint8Array(bits),x=>x.toString(16).padStart(2,'0')).join('');
 }
 function loginValid(str){let value=normalize(str);if(!/^[a-z0-9._-]{3,32}$/.test(value))throw Error('O login precisa de 3 a 32 caracteres: letras, números, ponto, hífen ou _.');return value;}
-function passValid(str){if(!str || str.length<10||str.length>128)throw Error('A senha precisa de 10 a 128 caracteres.');}
+function passValid(str){if(!str || str.length<6||str.length>128)throw Error('A senha precisa de 6 a 128 caracteres.');}
 function active(){return db.accounts.filter(x=>x.active!==false);}
 function getAccount(id){return db.accounts.find(x=>x.id===id)||null;}
 function list(){return db.accounts.map(({hash:ignored,salt:ignoredSalt,...rest})=>rest);}
