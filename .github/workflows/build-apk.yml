@@ -1,4 +1,4 @@
-name: Gerar APK Android ACR Suporte em T.I v1.5
+name: Gerar APK Android ACR Suporte em T.I v1.5.1
 on:
   push:
     branches: [main]
@@ -24,7 +24,7 @@ jobs:
       - name: Aplicar melhorias v1.2
         shell: bash
         run: |
-          if ! grep -Eq "OSProVersion = '(1\\.2\\.0|1\\.3\\.0|1\\.4\\.0|1\\.5\\.0|1\\.5\\.0)'" ospro-eletrica-software/app/src/main/assets/app.js; then
+          if ! grep -Eq "OSProVersion = '(1\\.2\\.0|1\\.3\\.0|1\\.4\\.0|1\\.5\\.[01]|1\\.5\\.[01])'" ospro-eletrica-software/app/src/main/assets/app.js; then
             if ! grep -q 'id="sign-name"' ospro-eletrica-software/app/src/main/assets/index.html; then
               base64 --decode scripts/apply-signature-name.py.gz.b64 | gzip -dc > /tmp/apply-name.py
               python /tmp/apply-name.py
@@ -57,7 +57,7 @@ jobs:
       - name: Aplicar assinatura remota e PDF v1.3
         shell: bash
         run: |
-          if ! grep -Eq "OSProVersion = '(1\\.3\\.0|1\\.4\\.0|1\\.5\\.0)'" ospro-eletrica-software/app/src/main/assets/app.js; then
+          if ! grep -Eq "OSProVersion = '(1\\.3\\.0|1\\.4\\.0|1\\.5\\.[01])'" ospro-eletrica-software/app/src/main/assets/app.js; then
             base64 --decode scripts/v1.3-server-patch.tgz.b64 > /tmp/ospro-v13.tar.gz
           echo '2ccafcebdc351173157ae0aba81a35fcb822ef095cc5be2989e0fa3db01445ae  /tmp/ospro-v13.tar.gz' | sha256sum -c -
           tar -xzf /tmp/ospro-v13.tar.gz -C ospro-eletrica-software
@@ -78,7 +78,7 @@ jobs:
       - name: Aplicar identidade ACR v1.4
         shell: bash
         run: |
-          if grep -Eq "OSProVersion = '(1\\.4\\.0|1\\.5\\.0)'" ospro-eletrica-software/app/src/main/assets/app.js; then
+          if grep -Eq "OSProVersion = '(1\\.4\\.0|1\\.5\\.[01])'" ospro-eletrica-software/app/src/main/assets/app.js; then
             echo "Identidade ACR já faz parte do código-fonte."
             echo "OSPRO_BRAND_BUNDLED=1" >> "$GITHUB_ENV"
           else
@@ -88,7 +88,7 @@ jobs:
             echo "OSPRO_BRAND_BUNDLED=0" >> "$GITHUB_ENV"
           fi
           node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -Eq "OSProVersion = '(1\\.4\\.0|1\\.5\\.0)'" ospro-eletrica-software/app/src/main/assets/app.js
+          grep -Eq "OSProVersion = '(1\\.4\\.0|1\\.5\\.[01])'" ospro-eletrica-software/app/src/main/assets/app.js
           grep -q 'ACR Suporte em T.I' ospro-eletrica-software/app/src/main/assets/index.html
           test -s ospro-eletrica-software/app/src/main/assets/brand/acr-logo.jpg
           test -s ospro-eletrica-software/app/src/main/assets/brand/acr-mark.jpg
@@ -97,7 +97,7 @@ jobs:
       - name: Aplicar login e cadastro de usuarios v1.5
         shell: bash
         run: |
-          if grep -q "OSProVersion = '1.5.0'" ospro-eletrica-software/app/src/main/assets/app.js; then
+          if grep -Eq "OSProVersion = '1[.]5[.][01]'" ospro-eletrica-software/app/src/main/assets/app.js; then
             echo "Login v1.5 já incorporado ao código-fonte."
             python - <<'PY'
           from pathlib import Path
@@ -115,7 +115,39 @@ jobs:
           node --check ospro-eletrica-software/app/src/main/assets/auth.js
           grep -q 'id="auth-screen"' ospro-eletrica-software/app/src/main/assets/index.html
           grep -q 'window.OSAuth.ready' ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'versionName = "1.5.0"' ospro-eletrica-software/app/build.gradle.kts
+          grep -Eq 'versionName = "1[.]5[.][01]"' ospro-eletrica-software/app/build.gradle.kts
+
+      - name: Aceitar senhas a partir de 6 caracteres v1.5.1
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          root=Path("ospro-eletrica-software")
+          changes=[
+            ("app/src/main/assets/auth.js","String(p).length<10","String(p).length<6"),
+            ("app/src/main/assets/auth.js","de 10 a 128 caracteres","de 6 a 128 caracteres"),
+            ("app/src/main/assets/index.html","mínimo 10 caracteres","mínimo 6 caracteres"),
+            ("app/src/main/assets/index.html",'minlength="10"','minlength="6"'),
+            ("app/build.gradle.kts","versionCode = 5","versionCode = 6"),
+            ("app/build.gradle.kts",'versionName = "1.5.0"','versionName = "1.5.1"'),
+            ("app/src/main/assets/app.js","OSProVersion = '1.5.0'","OSProVersion = '1.5.1'"),
+          ]
+          for relative,old,new in changes:
+              p=root/relative
+              s=p.read_text(encoding="utf-8")
+              if old in s:
+                  p.write_text(s.replace(old,new),encoding="utf-8")
+              elif new not in s:
+                  raise RuntimeError(f"Versao inesperada em {relative}: {old}")
+          auth=(root/"app/src/main/assets/auth.js").read_text()
+          html=(root/"app/src/main/assets/index.html").read_text()
+          assert "String(p).length<6" in auth and "de 6 a 128 caracteres" in auth
+          assert html.count('minlength="6"') >= 3 and "mínimo 6 caracteres" in html
+          print("Validador de seis caracteres e formularios atualizados.")
+          PY
+          node --check ospro-eletrica-software/app/src/main/assets/auth.js
+          node --check ospro-eletrica-software/app/src/main/assets/app.js
+          grep -q 'versionName = "1.5.1"' ospro-eletrica-software/app/build.gradle.kts
 
       - name: Instalar Java 17
         uses: actions/setup-java@v4
@@ -168,6 +200,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add OSPro-Eletrica-Software-Fonte.zip
           if ! git diff --cached --quiet; then
-            git commit -m "Atualizar fonte OS Pro v1.5 ACR com login e usuarios"
+            git commit -m "Atualizar fonte ACR OS Pro v1.5.1 senha minima 6"
             git push
           fi
