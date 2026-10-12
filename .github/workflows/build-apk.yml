@@ -1,221 +1,88 @@
-name: Gerar APK Android ACR Suporte em T.I v1.5.2
+name: Compilar ACR OS Pro v1.6 - Relatorios e GPS
 on:
   push:
     branches: [main]
+    paths:
+      - .github/workflows/build-apk.yml
+      - scripts/ospro-v1.6-patch.tgz.b64
+      - OSPro-Eletrica-Software-Fonte.zip
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-apk:
     runs-on: ubuntu-latest
     steps:
-      - name: Baixar arquivos do repositório
+      - name: Baixar projeto
         uses: actions/checkout@v4
 
-      - name: Extrair código-fonte OS Pro
+      - name: Preparar projeto Android e atualizacao
         shell: bash
         run: |
-          unzip -q "OSPro-Eletrica-Software-Fonte.zip"
-          test -f ospro-eletrica-software/settings.gradle.kts
+          unzip -q OSPro-Eletrica-Software-Fonte.zip
           test -f ospro-eletrica-software/app/build.gradle.kts
-
-      - name: Aplicar melhorias v1.2
-        shell: bash
-        run: |
-          if ! grep -Eq "OSProVersion = '(1\\.2\\.0|1\\.3\\.0|1\\.4\\.0|1\\.5\\.[012]|1\\.5\\.[012])'" ospro-eletrica-software/app/src/main/assets/app.js; then
-            if ! grep -q 'id="sign-name"' ospro-eletrica-software/app/src/main/assets/index.html; then
-              base64 --decode scripts/apply-signature-name.py.gz.b64 | gzip -dc > /tmp/apply-name.py
-              python /tmp/apply-name.py
-            fi
-            python - <<'PY'
-          from pathlib import Path
-          root=Path('ospro-eletrica-software')
-          j=root/'app/src/main/assets/app.js'
-          s=j.read_text();nl=chr(10)
-          old='signName.value=a?.name||pendingSignNames[activeRole]||signSuggestedName();signName.readOnly=!!a;'+nl+'    displaySignature(a?.image||null);updateSignButtons();'
-          new='signName.value=a?.name||pendingSignNames[activeRole]||signSuggestedName();'+nl+'    signName.readOnly=!!a;'+nl+'    displaySignature(a?.image||null);'+nl+'    updateSignButtons();'
-          s=s.replace(old,new)
-          j.write_text(s)
-          k=root/'app/src/main/java/br/com/ospro/ordens/MainActivity.kt'
-          s=k.read_text()
-          needle='        img(obj.optString("image"),245f,83f)'
-          if 'if(obj.optString("name").isNotBlank())field("Nome declarado"' not in s:
-              s=s.replace(needle,needle+nl+'        if(obj.optString("name").isNotBlank())field("Nome declarado",obj.optString("name"))')
-          k.write_text(s)
-          PY
-            base64 --decode scripts/apply-v1-2.py.gz.b64 | gzip -dc > /tmp/update-ospro.py
-            python /tmp/update-ospro.py
-          fi
-          node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'id="signature-name-preview"' ospro-eletrica-software/app/src/main/assets/index.html
-          grep -q 'id="logo-file"' ospro-eletrica-software/app/src/main/assets/index.html
-          grep -q 'field("Nome do assinante"' ospro-eletrica-software/app/src/main/java/br/com/ospro/ordens/MainActivity.kt
-          cd ospro-eletrica-software && node --test server/tests/server.test.js
-
-      - name: Aplicar assinatura remota e PDF v1.3
-        shell: bash
-        run: |
-          if ! grep -Eq "OSProVersion = '(1\\.3\\.0|1\\.4\\.0|1\\.5\\.[012])'" ospro-eletrica-software/app/src/main/assets/app.js; then
-            base64 --decode scripts/v1.3-server-patch.tgz.b64 > /tmp/ospro-v13.tar.gz
-          echo '2ccafcebdc351173157ae0aba81a35fcb822ef095cc5be2989e0fa3db01445ae  /tmp/ospro-v13.tar.gz' | sha256sum -c -
-          tar -xzf /tmp/ospro-v13.tar.gz -C ospro-eletrica-software
-          python ospro-eletrica-software/patch_app.py ospro-eletrica-software
-          rm ospro-eletrica-software/patch_app.py
-          node --check ospro-eletrica-software/server/server.js
-          node --check ospro-eletrica-software/server/pdf.js
-          node --check ospro-eletrica-software/server/public/sign.js
-          node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q "OSProVersion = '1.3.0'" ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'Baixar meu PDF assinado' ospro-eletrica-software/server/public/sign.html
-          sed -i 's/Assinatura eletrônica na tela/Visualizar documento em PDF/' ospro-eletrica-software/server/tests/server.test.js
-            cd ospro-eletrica-software/server && npm test
-          else
-            cd ospro-eletrica-software/server && npm test
-          fi
-
-      - name: Aplicar identidade ACR v1.4
-        shell: bash
-        run: |
-          if grep -Eq "OSProVersion = '(1\\.4\\.0|1\\.5\\.[012])'" ospro-eletrica-software/app/src/main/assets/app.js; then
-            echo "Identidade ACR já faz parte do código-fonte."
-            echo "OSPRO_BRAND_BUNDLED=1" >> "$GITHUB_ENV"
-          else
-            base64 --decode scripts/acr-brand-v1.4-overlay.tgz.b64 > /tmp/ospro-acr-v14.tar.gz
-            echo "cc2438899e3745a70175c5301bd9f0c5cba6ae5985db59bdc464721624325a95  /tmp/ospro-acr-v14.tar.gz" | sha256sum -c -
-            tar -xzf /tmp/ospro-acr-v14.tar.gz -C ospro-eletrica-software
-            echo "OSPRO_BRAND_BUNDLED=0" >> "$GITHUB_ENV"
-          fi
-          node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -Eq "OSProVersion = '(1\\.4\\.0|1\\.5\\.[012])'" ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'ACR Suporte em T.I' ospro-eletrica-software/app/src/main/assets/index.html
-          test -s ospro-eletrica-software/app/src/main/assets/brand/acr-logo.jpg
-          test -s ospro-eletrica-software/app/src/main/assets/brand/acr-mark.jpg
-          test -s ospro-eletrica-software/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-
-      - name: Aplicar login e cadastro de usuarios v1.5
-        shell: bash
-        run: |
-          if grep -Eq "OSProVersion = '1[.]5[.][012]'" ospro-eletrica-software/app/src/main/assets/app.js; then
-            echo "Login v1.5 já incorporado ao código-fonte."
-            python - <<'PY'
-          from pathlib import Path
-          p=Path('ospro-eletrica-software/app/src/main/assets/app.js')
-          s=p.read_text()
-          if s.rstrip().endswith('})();'):
-              p.write_text(s.rstrip()[:-5]+'});'+chr(10))
-              print('Corrigida inicialização de login herdada')
-          PY
-          else
-            cp scripts/auth-v1.5.js ospro-eletrica-software/app/src/main/assets/auth.js
-            python scripts/patch-login-v1.5.py ospro-eletrica-software
-          fi
+          base64 --decode scripts/ospro-v1.6-patch.tgz.b64 > /tmp/ospro-patch-v16.tgz
+          echo '4dfd83a3d7cd5ec538d599d0d7a840bcc2511c3f9da31efd4339fc3c2c41fc4e  /tmp/ospro-patch-v16.tgz' | sha256sum -c -
+          tar -xzf /tmp/ospro-patch-v16.tgz -C ospro-eletrica-software
           node --check ospro-eletrica-software/app/src/main/assets/app.js
           node --check ospro-eletrica-software/app/src/main/assets/auth.js
-          grep -q 'id="auth-screen"' ospro-eletrica-software/app/src/main/assets/index.html
-          grep -q 'window.OSAuth.ready' ospro-eletrica-software/app/src/main/assets/app.js
-          grep -Eq 'versionName = "1[.]5[.][012]"' ospro-eletrica-software/app/build.gradle.kts
+          grep -q 'window.OSProVersion = '\''1.6.0'\''' ospro-eletrica-software/app/src/main/assets/app.js
+          grep -q 'id="report-client"' ospro-eletrica-software/app/src/main/assets/index.html
+          grep -q 'id="capture-sign-gps"' ospro-eletrica-software/app/src/main/assets/index.html
+          grep -q 'versionName = "1.6.0"' ospro-eletrica-software/app/build.gradle.kts
+          cd ospro-eletrica-software/server && npm test
 
-      - name: Aceitar senhas a partir de 6 caracteres v1.5.1
-        shell: bash
-        run: |
-          if grep -q 'versionName = "1.5.2"' ospro-eletrica-software/app/build.gradle.kts; then
-            echo 'Senha de 6 caracteres ja aplicada.'
-          else
-            python - <<'PY'
-          from pathlib import Path
-          root=Path("ospro-eletrica-software")
-          changes=[
-            ("app/src/main/assets/index.html","mínimo 10 caracteres","mínimo 6 caracteres"),
-            ("app/src/main/assets/index.html",'minlength="10"','minlength="6"'),
-            ("app/build.gradle.kts","versionCode = 5","versionCode = 6"),
-            ("app/build.gradle.kts",'versionName = "1.5.0"','versionName = "1.5.1"'),
-            ("app/src/main/assets/app.js","OSProVersion = '1.5.0'","OSProVersion = '1.5.1'"),
-          ]
-          for relative,old,new in changes:
-              p=root/relative
-              s=p.read_text(encoding="utf-8")
-              if old in s:
-                  p.write_text(s.replace(old,new),encoding="utf-8")
-              elif new not in s:
-                  raise RuntimeError(f"Versao inesperada em {relative}: {old}")
-          auth_path=root/"app/src/main/assets/auth.js"
-          auth=auth_path.read_text(encoding="utf-8")
-          auth=auth.replace("String(p).length<10","String(p).length<6")
-          auth=auth.replace("str.length<10","str.length<6")
-          auth=auth.replace("de 10 a 128 caracteres","de 6 a 128 caracteres")
-          auth_path.write_text(auth,encoding="utf-8")
-          html=(root/"app/src/main/assets/index.html").read_text()
-          assert "length<6" in auth and "6 a 128 caracteres" in auth
-          assert html.count('minlength="6"') >= 3 and "mínimo 6 caracteres" in html
-          print("Validador de seis caracteres e formularios atualizados.")
-          PY
-          node --check ospro-eletrica-software/app/src/main/assets/auth.js
-          node --check ospro-eletrica-software/app/src/main/assets/app.js
-            grep -q 'versionName = "1.5.1"' ospro-eletrica-software/app/build.gradle.kts
-          fi
-
-      - name: Permitir login com email ou usuario v1.5.2
-        shell: bash
-        run: |
-          python scripts/accept-email-login-v1.5.2.py ospro-eletrica-software
-          node --check ospro-eletrica-software/app/src/main/assets/auth.js
-          node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'Usuário ou e-mail de acesso' ospro-eletrica-software/app/src/main/assets/index.html
-          grep -q 'versionName = "1.5.2"' ospro-eletrica-software/app/build.gradle.kts
-
-      - name: Instalar Java 17
+      - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Preparar Android SDK 35
+      - name: Android SDK
         shell: bash
         run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"
           SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -path '*/bin/sdkmanager' -type f | head -1)
           test -n "$SDKMANAGER"
           "$SDKMANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
 
-      - name: Instalar Gradle
+      - name: Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
 
-      - name: Compilar APK Android
+      - name: Compilar APK
         working-directory: ospro-eletrica-software
         run: gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Verificar APK gerado
+      - name: Conferir APK
         run: test -s ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Disponibilizar APK para baixar
+      - name: APK para download
         uses: actions/upload-artifact@v4
         with:
-          name: OSPro-Eletrica-Software-APK
+          name: ACR-OS-Pro-v1.6-APK
           path: ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
 
-      - name: Atualizar ZIP do código-fonte no repositório
-        if: success()
+      - name: Codigo fonte atualizado
         shell: bash
         run: |
           python - <<'PY'
+          from zipfile import ZipFile,ZIP_DEFLATED
           from pathlib import Path
-          from zipfile import ZipFile, ZIP_DEFLATED
-          folder=Path('ospro-eletrica-software')
-          with ZipFile('OSPro-Eletrica-Software-Fonte.zip','w',ZIP_DEFLATED) as z:
-              for file in folder.rglob('*'):
-                  if file.is_file() and not {'.gradle','build','.idea'}.intersection(file.parts):
-                      z.write(file)
+          root=Path('ospro-eletrica-software')
+          with ZipFile('ACR-OS-Pro-v1.6-Fonte.zip','w',ZIP_DEFLATED) as z:
+              for p in root.rglob('*'):
+                  if p.is_file() and not {'.gradle','build','.idea'}.intersection(p.parts):
+                      z.write(p)
           PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add OSPro-Eletrica-Software-Fonte.zip
-          if ! git diff --cached --quiet; then
-            git commit -m "Atualizar fonte ACR OS Pro v1.5.2 login com email"
-            git push
-          fi
+      - name: Fonte para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACR-OS-Pro-v1.6-Fonte
+          path: ACR-OS-Pro-v1.6-Fonte.zip
+          if-no-files-found: error
+          retention-days: 30
