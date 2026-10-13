@@ -1,0 +1,46 @@
+    <section id="licencas" class="pane" aria-labelledby="title-licencas">
+      <div class="heading"><div><p class="eyebrow">GESTÃO DE SOFTWARE E CONTRATOS</p><h1 id="title-licencas">Licenças de Software</h1>
+        <p>Cadastre licenças, acompanhe vencimentos e pagamentos e gere relatórios financeiros detalhados.</p></div></div>
+      <div class="panel">
+        <h2>Cadastrar / editar licença</h2>
+        <form id="license-form">
+          <input type="hidden" name="id">
+          <div class="form-grid">
+            <label class="wide">Nome do software * <input name="software" required maxlength="180" placeholder="Microsoft 365, Antivírus, Sistema ERP..."></label>
+            <label>Tipo de licença * <input name="tipoLicenca" required maxlength="120" list="license-type-list" placeholder="Anual, mensal, vitalícia, OEM..."><datalist id="license-type-list"><option value="Assinatura mensal"></option><option value="Assinatura anual"></option><option value="Licença perpétua"></option><option value="OEM"></option><option value="Por dispositivo"></option><option value="Por usuário"></option></datalist></label>
+            <label>Unidade * <input name="unidade" required maxlength="80" placeholder="usuário, computador, dispositivo, pacote..."></label>
+            <label>Quantidade de unidades * <input name="quantidade" type="number" step="1" min="1" max="100000" required value="1" inputmode="numeric"></label>
+            <label>Valor por unidade (R$) * <input name="valorUnitario" type="number" step="0.01" min="0" max="100000000" required value="0" inputmode="decimal"></label>
+            <label class="wide">Valor total calculado <output id="license-total" class="license-amount" aria-live="polite">R$ 0,00</output></label>
+            <label>Data de vencimento * <input name="vencimento" type="date" required></label>
+            <label>Situação do pagamento * <select name="status" required><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="atrasado">Atrasado</option></select></label>
+            <label>Data do pagamento <input name="dataPagamento" type="date"></label>
+            <label>Fornecedor (opcional) <input name="fornecedor" maxlength="160" placeholder="Fabricante, parceiro ou revendedor"></label>
+            <label>Empresa/cliente vinculado (opcional) <select name="empresaId" id="license-company"><option value="">Sem vínculo</option></select></label>
+            <label class="wide">Descrição e características do software <textarea name="descricao" maxlength="2000" rows="4" placeholder="Tipo de uso, funcionalidades, versão, suporte, contrato ou observações. Evite armazenar chaves de ativação."></textarea></label>
+          </div>
+          <div id="license-expiration" class="license-alert" role="status" aria-live="polite">Informe o vencimento para acompanhar o prazo.</div>
+          <div class="actions"><button type="submit" class="primary" id="license-save">Salvar licença</button><button type="button" class="outline" id="license-clear">Limpar</button></div>
+          <p class="hint" id="license-form-status" role="status" aria-live="polite"></p>
+        </form>
+      </div>
+      <div class="panel">
+        <h2>Resumo financeiro de licenças</h2>
+        <div class="report-kpis" aria-live="polite">
+          <div><small>Licenças cadastradas</small><strong id="license-count">0</strong></div>
+          <div><small>Valor total</small><strong id="license-sum">R$ 0,00</strong></div>
+          <div><small>Pagas</small><strong id="license-paid-count">0</strong></div>
+          <div><small>Atrasadas</small><strong id="license-late-count">0</strong></div>
+        </div>
+        <p id="license-status-totals" class="hint"></p>
+        <div class="form-grid">
+          <label>Buscar software, fornecedor ou tipo <input type="search" id="license-search" placeholder="Ex.: Microsoft, antivírus, ERP..."></label>
+          <label>Filtrar por situação <select id="license-status-filter"><option value="">Todas</option><option value="pago">Pagas</option><option value="pendente">Pendentes</option><option value="atrasado">Atrasadas</option></select></label>
+          <label>Empresa <select id="license-company-filter"><option value="">Todas as empresas</option></select></label>
+        </div>
+        <div class="actions"><button id="license-export-pdf" class="primary" type="button">Gerar PDF detalhado</button><button id="license-refresh" class="outline" type="button">Atualizar dados do servidor</button></div>
+        <p class="hint">O PDF detalha cada licença, unidades, valores, vencimento, dias de atraso e totais consolidados dos registros filtrados.</p>
+        <p id="license-report-status" class="hint" role="status" aria-live="polite"></p>
+        <div id="license-list" class="stack" aria-live="polite"></div>
+      </div>
+    </section>
