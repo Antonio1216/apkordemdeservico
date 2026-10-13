@@ -20,8 +20,19 @@ jobs:
           tar -xzf /tmp/v16.tgz -C ospro-eletrica-software
           base64 --decode scripts/ospro-v1.7-overlay.tgz.b64 > /tmp/v17.tgz
           tar -xzf /tmp/v17.tgz -C ospro-eletrica-software
+          python scripts/fix-photo-picker.py ospro-eletrica-software
+          node --check ospro-eletrica-software/app/src/main/assets/app.js
           echo "=== HTML e JS relevante ==="
           grep -nEi "escolher foto|tirar foto|galeria|camera|câmera|capture=|type=.file|photo|image" ospro-eletrica-software/app/src/main/assets/index.html ospro-eletrica-software/app/src/main/assets/app.js | head -110 || true
           echo "=== ANDROID e outros arquivos relevantes ==="
           find ospro-eletrica-software/app/src/main -type f \( -name '*.kt' -o -name '*.java' \) -print
           grep -RnEi -C 4 --include="*.kt" --include="*.java" "onShowFileChooser|ACTION_IMAGE_CAPTURE|takePicture|photoPicker|fileChooser|capture|createIntent|openDocument" ospro-eletrica-software/app/src/main | head -260 || true
+          echo "=== Validar controles separados ==="
+          grep -q 'id="photo-input" type="file" accept="image/\*" hidden' ospro-eletrica-software/app/src/main/assets/index.html
+          grep -q 'id="photo-camera" type="file" accept="image/\*" capture="environment" hidden' ospro-eletrica-software/app/src/main/assets/index.html
+          grep -q "onchange=onPhotoSelected" ospro-eletrica-software/app/src/main/assets/app.js
+          if grep -q 'Intent.EXTRA_INITIAL_INTENTS' ospro-eletrica-software/app/src/main/java/br/com/ospro/ordens/MainActivity.kt; then
+            echo 'Falha: galeria ainda inclui câmera obrigatória'
+            exit 1
+          fi
+          echo "Galeria e câmera separadas e validadas"
