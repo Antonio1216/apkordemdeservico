@@ -3,6 +3,8 @@
 // Produces a readable work order and embeds the client's JPEG signature.
 const {Buffer} = require('node:buffer');
 const zlib = require('node:zlib');
+const fs = require('node:fs');
+const path = require('node:path');
 const W = 595.28, H = 841.89, M = 46;
 const safe = s => String(s ?? '').normalize('NFKC').replace(/[\u0000-\u001f\u007f]/g,' ').replace(/[\u2010-\u2015]/g,'-').replace(/[\u2018\u2019]/g,"'").replace(/[\u201c\u201d]/g,'"').replace(/\u20ac/g,'EUR').replace(/[^\u0020-\u007e\u00a0-\u00ff]/g,'?');
 const enc = s => Buffer.from(safe(s),'latin1');
@@ -43,9 +45,55 @@ function decodePng(data) {
   return {width:w,height:h,bytes:zlib.deflateSync(rgb),filter:'/FlateDecode'};
 }
 
+function jpegImage(bytes){
+  if(bytes.length<100||bytes[0]!==0xff||bytes[1]!==0xd8)return null;
+  for(let i=2;i<bytes.length-9;i++){
+    if(bytes[i]===0xff && [0xc0,0xc1,0xc2,0xc3].includes(bytes[i+1])){
+      const height=bytes.readUInt16BE(i+5),width=bytes.readUInt16BE(i+7);
+      if(width>0&&height>0&&width*height<=6000000)return {width,height,bytes,filter:'/DCTDecode'};
+    }
+  }
+  return null;
+}
+const brandLogo=jpegImage(fs.readFileSync(path.join(__dirname,'public','brand','acr-logo.jpg')));
 function makePdf(order) {
   const pages=[];let parts=[],y=H-M;
-  function newPage(){if(parts.length)pages.push(parts.join(''));parts=[];y=H-M;}
+  const INK='0.065 0.176 0.306',GOLD='0.89 0.65 0.18';
+  const absolute=(t,x,at,size=10,font='F1',color=INK)=>{
+    parts.push(`${color} rg BT /${font} ${size} Tf 1 0 0 1 ${x.toFixed(2)} ${at.toFixed(2)} Tm (${escape(t)}) Tj ET\n`);
+  };
+  function top(first){
+    if(first){
+      parts.push(`${INK} rg 0 ${(H-150).toFixed(2)} ${W} 150 re f\n`);
+      parts.push(`${GOLD} rg 0 ${(H-155).toFixed(2)} ${W} 5 re f\n`);
+      parts.push(`1 1 1 rg ${M} ${(H-121).toFixed(2)} 142 93 re f\n`);
+      if(brandLogo){
+        const w=Math.min(138,89*brandLogo.width/brandLogo.height),h=w*brandLogo.height/brandLogo.width;
+        const x=M+(142-w)/2,topY=H-121+(93-h)/2;
+        parts.push(`q ${w.toFixed(2)} 0 0 ${h.toFixed(2)} ${x.toFixed(2)} ${topY.toFixed(2)} cm /Brand Do Q\n`);
+      }
+      const company=safe(order.companyName||'ACR Suporte em T.I');
+      const titleMax=35;
+      absolute(company.slice(0,titleMax),207,H-66,15,'F2','1 1 1');
+      if(company.length>titleMax)absolute(company.slice(titleMax,titleMax*2),207,H-84,11,'F2','1 1 1');
+      absolute('ORDEM DE SERVIÇO',207,H-108,12,'F2','1 0.79 0.35');
+      absolute(order.orderNumber||'OS',207,H-130,11,'F1','1 1 1');
+      y=H-184;
+    }else{
+      parts.push(`${INK} rg 0 ${(H-66).toFixed(2)} ${W} 66 re f\n`);
+      parts.push(`${GOLD} rg 0 ${(H-71).toFixed(2)} ${W} 5 re f\n`);
+      absolute('ACR Suporte em T.I | Ordem de Serviço',M,H-39,13,'F2','1 1 1');
+      absolute(order.orderNumber||'OS',M,H-57,9,'F1','1 1 1');
+      y=H-95;
+    }
+  }
+  function footer(){
+    parts.push(`0.85 0.88 0.92 RG 0.7 w ${M} 49 m ${(W-M).toFixed(2)} 49 l S\n`);
+    absolute('ACR SUPORTE EM T.I  |  DOCUMENTO DE ORDEM DE SERVIÇO',M,35,8,'F1',INK);
+    absolute('Página '+(pages.length+1),W-M-49,35,8,'F1',INK);
+  }
+  function newPage(){if(parts.length){footer();pages.push(parts.join(''));}parts=[];top(false);}
+  top(true);
   function writeLine(t,{font='F1',size=10,indent=0,color='0.12 0.20 0.30'}={}){
     if(y<65)newPage();parts.push(`${color} rg BT /${font} ${size} Tf 1 0 0 1 ${M+indent} ${y.toFixed(2)} Tm (${escape(t)}) Tj ET\n`);y-=size+6;
   }
@@ -56,10 +104,15 @@ function makePdf(order) {
     for(const word of words){if(line&&`${line} ${word}`.length>max){writeLine(line,{size,indent});line='';}if(word.length>max){if(line){writeLine(line,{size,indent});line='';}for(let pos=0;pos<word.length;pos+=max)writeLine(word.slice(pos,pos+max),{size,indent});}else line+=(line?' ':'')+word;}
     if(line)writeLine(line,{size,indent});
   }
-  const section=t=>{y-=6;writeLine(t,{font:'F2',size:13,color:'0.07 0.24 0.42'});};
-  writeLine(order.companyName||'OS PRO - ELETRICA E SOFTWARE',{font:'F2',size:15,color:'0.05 0.17 0.31'});
-  writeLine('ORDEM DE SERVICO - '+order.orderNumber,{font:'F2',size:13});
-  y-=7;
+  const section=t=>{
+    if(y<146)newPage();
+    y-=10;
+    parts.push(`0.935 0.960 0.980 rg ${M} ${(y-13).toFixed(2)} ${(W-2*M).toFixed(2)} 31 re f\n`);
+    parts.push(`${GOLD} rg ${M} ${(y-13).toFixed(2)} 4 31 re f\n`);
+    absolute(t,M+13,y-1,12,'F2',INK);
+    y-=43;
+  };
+  section('Identificação');
   wrapped('Cliente',order.clientName);wrapped('Servico',order.serviceTitle);
   wrapped('Tipo',order.details?.type||'Nao informado');
   wrapped('Tecnico',order.details?.technician||'Nao informado');
@@ -73,16 +126,16 @@ function makePdf(order) {
   if(order.details?.materialsCost!==undefined)wrapped('Materiais',money(order.details.materialsCost));
   if(order.details?.travel!==undefined)wrapped('Deslocamento',money(order.details.travel));
   if(order.details?.discount!==undefined)wrapped('Desconto',money(order.details.discount));
-  writeLine('TOTAL: '+money(order.total),{font:'F2',size:12});
+  if(y<122)newPage();
+  y-=8;parts.push(`${INK} rg ${M} ${(y-33).toFixed(2)} ${(W-2*M).toFixed(2)} 42 re f\n`);
+  absolute('VALOR TOTAL: '+money(order.total),M+16,y-16,13,'F2','1 1 1');
+  y-=53;
   section('Confirmacao da assinatura');
   const signed=order.status==='signed' && order.signature;
   wrapped('Status',signed?'Assinatura eletronica simples registrada':'Documento para conferencia, ainda nao assinado');
   if(signed){
+    if(y<255)newPage();
     wrapped('Nome do assinante',order.signature.name);
-    wrapped('Data e horario (Brasilia)',when(order.signature.signedAt));
-    const loc=order.signature.location;
-    wrapped('Localizacao informada pelo aparelho',loc ? `${loc.lat.toFixed(6)}, ${loc.lon.toFixed(6)} (precisao estimada ${Math.round(loc.accuracy||0)} m)`:'Nao autorizada / indisponivel');
-    wrapped('Registro de auditoria SHA-256',order.signature.audit,{size:8});
   }else{
     writeLine('Confira este documento antes de prosseguir com a assinatura.',{size:10});
   }
@@ -100,19 +153,29 @@ function makePdf(order) {
     }
   }
   if(signatureImage){
-    if(y<170)newPage();
-    y-=85; parts.push(`q 230 0 0 75 ${M} ${y.toFixed(2)} cm /Sig Do Q\n`);
-    y-=10;
-  }else if(signed){wrapped('Assinatura desenhada','Imagem PNG disponivel no registro digital da OS');}
+    if(y<185)newPage();
+    y-=92;
+    parts.push(`0.96 0.97 0.99 rg ${M} ${y.toFixed(2)} 258 88 re f\n`);
+    parts.push(`q 238 0 0 76 ${(M+9).toFixed(2)} ${(y+6).toFixed(2)} cm /Sig Do Q\n`);
+    y-=15;
+  }else if(signed){wrapped('Assinatura desenhada','Imagem disponibilizada no registro digital da OS');}
+  if(signed){
+    wrapped('Data e horário (Brasília)',when(order.signature.signedAt));
+    const loc=order.signature.location;
+    wrapped('Localização informada pelo aparelho',loc ? `${loc.lat.toFixed(6)}, ${loc.lon.toFixed(6)} (precisão estimada ${Math.round(loc.accuracy||0)} m)`:'Não autorizada ou indisponível');
+    wrapped('Registro de auditoria SHA-256',order.signature.audit,{size:8});
+  }
   y-=10;
   wrapped('Observacao','Esta assinatura simples nao equivale a um certificado digital GOV.BR.',{size:9});
   wrapped('Emissao do PDF',when(new Date().toISOString()),{size:9});
-  newPage();
+  footer();pages.push(parts.join(''));
   const objects=[null], add=s=>{objects.push(s);return objects.length-1;};
   const catalog=add('');const pagesObj=add('');
   const font1=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
   const font2=add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
   let imageObj=null;
+  let brandObj=null;
+  if(brandLogo){const {width,height,bytes,filter}=brandLogo;brandObj=add([`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter ${filter} /Length ${bytes.length} >>\nstream\n`,bytes,'\nendstream']);}
   if(signatureImage){
     const {width,height,bytes,filter}=signatureImage;
     imageObj=add([`<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter ${filter} /Length ${bytes.length} >>\nstream\n`,bytes,'\nendstream']);
@@ -121,7 +184,7 @@ function makePdf(order) {
   for(const pageText of pages){
     const content=Buffer.from(pageText,'latin1');
     const contentId=add([`<< /Length ${content.length} >>\nstream\n`,content,'\nendstream']);
-    const resources=`<< /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> ${imageObj?`/XObject << /Sig ${imageObj} 0 R >>`:''} >>`;
+    const resources=`<< /Font << /F1 ${font1} 0 R /F2 ${font2} 0 R >> /XObject << ${imageObj?`/Sig ${imageObj} 0 R`:''} ${brandObj?`/Brand ${brandObj} 0 R`:''} >> >>`;
     pageIds.push(add(`<< /Type /Page /Parent ${pagesObj} 0 R /MediaBox [0 0 ${W} ${H}] /Resources ${resources} /Contents ${contentId} 0 R >>`));
   }
   objects[catalog]=`<< /Type /Catalog /Pages ${pagesObj} 0 R >>`;
