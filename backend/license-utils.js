@@ -8,7 +8,7 @@
     return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===v;
   };
   const days=(today,due)=>Math.round((Date.parse(today+'T00:00:00Z')-Date.parse(due+'T00:00:00Z'))/86400000);
-  const todayUTC=()=>new Date().toLocaleDateString('en-CA',{timeZone:'America/Sao_Paulo'});
+  const todayUTC=()=>{const parts=new Intl.DateTimeFormat('en-US',{timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const get=t=>parts.find(x=>x.type===t).value;return get('year')+'-'+get('month')+'-'+get('day');};
   function evaluate(record,today=todayUTC()){
     if(!isDay(today))throw Error('Data atual inválida.');
     if(!record||typeof record!=='object'||Array.isArray(record))throw Error('Dados da licença inválidos.');
