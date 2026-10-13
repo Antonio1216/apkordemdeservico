@@ -182,7 +182,7 @@ function teamApi(options={}) {
             if(expense.categoria!=='viagem')continue;
             const t=expense.viagem;
             if(expense.tipo!=='despesa'||!t||typeof t!=='object'||
-              !/^\\d{4}-\\d{2}-\\d{2}$/.test(String(expense.data||''))||
+              !/^\d{4}-\d{2}-\d{2}$/.test(String(expense.data||''))||
               typeof expense.osNumero!=='string'||expense.osNumero.length>120||
               typeof expense.descricao!=='string'||expense.descricao.length>220||
               typeof t.tanqueCompleto!=='boolean'||typeof t.incluirAbastecimento!=='boolean'){
