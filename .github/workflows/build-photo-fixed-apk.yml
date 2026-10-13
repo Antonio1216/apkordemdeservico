@@ -1,4 +1,4 @@
-name: ACR OS Pro v1.7.8 - Licencas de Software
+name: ACR OS Pro - Compilacao segura e atualizacao com assinatura permanente
 
 on:
   pull_request:
@@ -21,6 +21,7 @@ on:
       - 'scripts/licenses-v178.js'
       - 'scripts/licenses-panel-v178.html'
       - 'backend/license-utils.js'
+      - 'scripts/sign-android-update.sh'
   push:
     branches: [main]
     paths:
@@ -42,6 +43,7 @@ on:
       - 'scripts/licenses-v178.js'
       - 'scripts/licenses-panel-v178.html'
       - 'backend/license-utils.js'
+      - 'scripts/sign-android-update.sh'
   workflow_dispatch:
 
 permissions:
@@ -152,18 +154,37 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Compilar APK
+      # PR / push: valida código Android sem gerar APK instalável de assinatura efêmera.
+      - name: Testar compilação Android (DEBUG NÃO É DISTRIBUÍDO)
         working-directory: ospro-eletrica-software
         run: gradle --no-daemon --stacktrace :app:assembleDebug
 
-      - name: Validar APK gerado
-        run: test -s ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
+      # Só workflow_dispatch no branch main pode publicar um APK para atualização.
+      # As credenciais e o fingerprint do certificado ORIGINAL são obrigatórios.
+      - name: Compilar release não assinada
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        working-directory: ospro-eletrica-software
+        run: gradle --no-daemon --stacktrace :app:assembleRelease
 
-      - name: Disponibilizar APK corrigido
+      - name: Assinar com certificado ORIGINAL e validar fingerprint
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          ACR_KEYSTORE_B64: ${{ secrets.ACR_KEYSTORE_B64 }}
+          ACR_KEYSTORE_PASSWORD: ${{ secrets.ACR_KEYSTORE_PASSWORD }}
+          ACR_KEY_ALIAS: ${{ secrets.ACR_KEY_ALIAS }}
+          ACR_KEY_PASSWORD: ${{ secrets.ACR_KEY_PASSWORD }}
+          ACR_SIGNER_SHA256: ${{ vars.ACR_SIGNER_SHA256 }}
+        run: |
+          set -euo pipefail
+          bash scripts/sign-android-update.sh ospro-eletrica-software dist/ACR-OS-Pro-v1.7.8-Atualizacao-Assinada.apk
+
+      - name: Publicar SOMENTE APK validado (nunca DEBUG)
+        if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.8-Licencas-APK
-          path: ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
+          name: ACR-OS-Pro-v1.7.8-Atualizacao-Assinada
+          path: dist/ACR-OS-Pro-v1.7.8-Atualizacao-Assinada.apk
           retention-days: 30
           if-no-files-found: error
 
