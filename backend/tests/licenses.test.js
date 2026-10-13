@@ -19,7 +19,7 @@ test('licença: multiplica unidades, calcula vencimento e atraso',()=>{
  assert.throws(()=>model.validate(license({total:123}),day),/Total da licença/);
  assert.throws(()=>model.validate(license({vencimento:'2026-02-30'}),day),/vencimento/);
  assert.throws(()=>model.validate(license({quantidade:0}),day),/Quantidade/);
- assert.throws(()=>model.validate(license({status:'pago'}),day),/pagamento/);
+ assert.throws(()=>model.validate(license({status:'pago'}),day),/foi paga/);
  assert.throws(()=>model.validate(license({vencimento:'2026-10-14',status:'atrasado'}),day),/atrasada/);
  const sums=model.summary([license(),license({id:'2',status:'pago',dataPagamento:day,quantidade:1,valorUnitario:50,total:50}),license({id:'3',vencimento:'2026-10-20',quantidade:2,valorUnitario:19.9,total:39.8})],day);
  assert.equal(sums.licenses,3);assert.equal(sums.units,15);assert.equal(sums.total,1048.6);
