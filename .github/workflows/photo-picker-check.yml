@@ -21,7 +21,7 @@ jobs:
           base64 --decode scripts/ospro-v1.7-overlay.tgz.b64 > /tmp/v17.tgz
           tar -xzf /tmp/v17.tgz -C ospro-eletrica-software
           echo "=== HTML e JS relevante ==="
-          rg -n -i "escolher foto|tirar foto|galeria|camera|câmera|capture=|type=.file|photo|image" ospro-eletrica-software/app/src/main/assets/index.html ospro-eletrica-software/app/src/main/assets/app.js | head -110 || true
+          grep -nEi "escolher foto|tirar foto|galeria|camera|câmera|capture=|type=.file|photo|image" ospro-eletrica-software/app/src/main/assets/index.html ospro-eletrica-software/app/src/main/assets/app.js | head -110 || true
           echo "=== ANDROID e outros arquivos relevantes ==="
           find ospro-eletrica-software/app/src/main -type f \( -name '*.kt' -o -name '*.java' \) -print
-          rg -n -i -C 4 "onShowFileChooser|ACTION_IMAGE_CAPTURE|takePicture|photoPicker|fileChooser|capture|createIntent|openDocument" ospro-eletrica-software/app/src/main --glob '*.kt' --glob '*.java' | head -260 || true
+          grep -RnEi -C 4 --include="*.kt" --include="*.java" "onShowFileChooser|ACTION_IMAGE_CAPTURE|takePicture|photoPicker|fileChooser|capture|createIntent|openDocument" ospro-eletrica-software/app/src/main | head -260 || true
