@@ -1,4 +1,4 @@
-name: ACR OS Pro v1.7.3 - Arquivos e Camera
+name: ACR OS Pro v1.7.4 - Permissoes
 
 on:
   pull_request:
@@ -6,12 +6,14 @@ on:
       - '.github/workflows/build-photo-fixed-apk.yml'
       - 'scripts/fix-photo-picker.py'
       - 'scripts/fix-document-picker.py'
-      - 'scripts/fix-document-picker.py'
+      - 'scripts/add-user-permissions-v174.py'
   push:
     branches: [main]
     paths:
       - '.github/workflows/build-photo-fixed-apk.yml'
       - 'scripts/fix-photo-picker.py'
+      - 'scripts/fix-document-picker.py'
+      - 'scripts/add-user-permissions-v174.py'
   workflow_dispatch:
 
 permissions:
@@ -37,13 +39,20 @@ jobs:
           tar -xzf /tmp/ospro-v17.tgz -C ospro-eletrica-software
           python scripts/fix-photo-picker.py ospro-eletrica-software
           python scripts/fix-document-picker.py ospro-eletrica-software
+          python scripts/add-user-permissions-v174.py ospro-eletrica-software
+          node --check ospro-eletrica-software/app/src/main/assets/auth.js
+          node --check ospro-eletrica-software/app/src/main/assets/permissions.js
           node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'versionName = "1.7.3"' ospro-eletrica-software/app/build.gradle.kts
+          grep -q 'versionName = "1.7.4"' ospro-eletrica-software/app/build.gradle.kts
           python - <<'PY'
           from pathlib import Path
           root=Path('ospro-eletrica-software/app/src/main')
           code=(root/'java/br/com/ospro/ordens/MainActivity.kt').read_text()
           h=(root/'assets/index.html').read_text()
+          assert (root/'assets/permissions.js').exists()
+          assert 'id="permissions-form"' in h
+          assert 'id="permission-user"' in h
+          assert 'id="permissions.js"' not in h or 'src="permissions.js"' in h
           assert 'Intent(Intent.ACTION_OPEN_DOCUMENT)' in code
           assert code.count('Intent(MediaStore.ACTION_IMAGE_CAPTURE)') == 1
           assert 'val cameraRequested = params.isCaptureEnabled && onlyImages' in code
@@ -84,7 +93,7 @@ jobs:
       - name: Disponibilizar APK corrigido
         uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.3-Documentos-APK
+          name: ACR-OS-Pro-v1.7.4-Permissoes-APK
           path: ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error
@@ -96,14 +105,14 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile, ZIP_DEFLATED
           root=Path('ospro-eletrica-software')
-          with ZipFile('ACR-OS-Pro-v1.7.3-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
+          with ZipFile('ACR-OS-Pro-v1.7.4-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
               for item in root.rglob('*'):
                   if item.is_file() and not {'.gradle','build','.idea'}.intersection(item.parts):
                       archive.write(item)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.3-Fonte
-          path: ACR-OS-Pro-v1.7.3-Fonte.zip
+          name: ACR-OS-Pro-v1.7.4-Fonte
+          path: ACR-OS-Pro-v1.7.4-Fonte.zip
           retention-days: 30
           if-no-files-found: error

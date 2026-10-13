@@ -20,7 +20,14 @@ try { records = JSON.parse(fs.readFileSync(DBFILE,'utf8')); } catch(e) {if(e.cod
 let writeQueue = Promise.resolve();
 function persist(){const text=JSON.stringify(records);writeQueue=writeQueue.catch(()=>{}).then(async()=>{await fs.promises.mkdir(path.dirname(DBFILE),{recursive:true});const file=DBFILE+'.'+process.pid+'.tmp';await fs.promises.writeFile(file,text,{mode:0o600});await fs.promises.rename(file,DBFILE);});return writeQueue;}
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
-function authorised(req){const supplied=String(req.headers['x-api-key']||'');const a=Buffer.from(hash(supplied),'hex'),b=Buffer.from(hash(KEY),'hex');return crypto.timingSafeEqual(a,b) || Boolean(team.getActor(req));}
+function authorised(req,right=null){
+  const actor=team.getActor(req);
+  // Nunca substitua uma sessão de usuário inválida ou revogada pela ADMIN_KEY residual do aparelho.
+  if(req.headers.authorization)return Boolean(actor)&&(!right||team.hasPermission(req,right));
+  const supplied=String(req.headers['x-api-key']||'');
+  const a=Buffer.from(hash(supplied),'hex'),b=Buffer.from(hash(KEY),'hex');
+  return crypto.timingSafeEqual(a,b);
+}
 function headers(res,code,extra={}){res.writeHead(code,{'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'",...extra});}
 function cors(req,res){const origin=String(req.headers.origin||'');if(origin==='https://appassets.androidplatform.net'||origin==='http://localhost:5500'||origin==='http://127.0.0.1:5500'||origin==='http://localhost:8080'){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Content-Type, X-API-Key, Authorization');res.setHeader('Access-Control-Allow-Methods','GET, POST, PUT, DELETE, OPTIONS');}}
 function json(res,code,obj){headers(res,code,{'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(obj));}
@@ -64,7 +71,7 @@ const server=http.createServer(async(req,res)=>{
       return pdfResponse(res,data,`OS-${item.orderNumber.replace(/[^A-Za-z0-9_-]/g,'_')}-assinada.pdf`,false);
     }
     if(req.method==='POST'&&p==='/api/sign-requests'){
-      if(!authorised(req))return json(res,401,{error:'Chave administrativa inválida.'});
+      if(!authorised(req,'links'))return json(res,team.getActor(req)?403:401,{error:'Sem permissão para gerar links de assinatura.'});
       const body=await getBody(req);
       if(!validateString(body.orderNumber,60)||!validateString(body.clientName,140)||!validateString(body.serviceTitle,180))return json(res,400,{error:'Dados incompletos: OS, cliente e serviço são obrigatórios.'});
       const id=crypto.randomUUID(),token=crypto.randomBytes(32).toString('base64url'),date=Date.now();
@@ -77,7 +84,7 @@ const server=http.createServer(async(req,res)=>{
     }
     const privatePdf=p.match(/^\/api\/sign-requests\/([0-9a-f-]{36})\/document[.]pdf$/i);
     if(req.method==='GET'&&privatePdf){
-      if(!authorised(req))return json(res,401,{error:'Chave administrativa inválida.'});
+      if(!authorised(req,'links'))return json(res,team.getActor(req)?403:401,{error:'Sem permissão para baixar documento da assinatura.'});
       const item=records[privatePdf[1]];if(!item)return json(res,404,{error:'Ordem não encontrada.'});
       const file=path.join(PDFDIR, item.id+'.pdf');
       let data;if(item.status==='signed')try{data=await fs.promises.readFile(file);}catch(e){if(e.code!=='ENOENT')throw e;}
@@ -85,7 +92,7 @@ const server=http.createServer(async(req,res)=>{
       return pdfResponse(res,data,`OS-${item.orderNumber.replace(/[^A-Za-z0-9_-]/g,'_')}.pdf`,true);
     }
     const priv=p.match(/^\/api\/sign-requests\/([0-9a-f-]{36})$/i);
-    if(req.method==='GET'&&priv){if(!authorised(req))return json(res,401,{error:'Chave administrativa inválida.'});const item=records[priv[1]];if(!item)return json(res,404,{error:'Assinatura não encontrada.'});return json(res,200,{id:item.id,status:item.status,signature:item.signature,expiresAt:item.expiresAt});}
+    if(req.method==='GET'&&priv){if(!authorised(req,'links'))return json(res,team.getActor(req)?403:401,{error:'Sem permissão para consultar assinaturas por link.'});const item=records[priv[1]];if(!item)return json(res,404,{error:'Assinatura não encontrada.'});return json(res,200,{id:item.id,status:item.status,signature:item.signature,expiresAt:item.expiresAt});}
     const pub=p.match(/^\/api\/public\/([A-Za-z0-9_-]{40,90})(\/(?:sign|location|document[.]pdf))?$/);
     if(pub){const item=entryByToken(pub[1]);if(!item)return json(res,404,{error:'Link inexistente.'});if(item.status==='signed')return json(res,410,{error:'Link de assinatura encerrado: assinatura já registrada.'});if(item.status==='pending'&&Date.now()>Date.parse(item.expiresAt)){item.status='expired';await persist();}
       if(req.method==='GET'&&!pub[2])return json(res,200,{orderNumber:item.orderNumber,clientName:item.clientName,serviceTitle:item.serviceTitle,companyName:item.companyName||'OS PRO',details:item.details||{},summary:item.summary,total:item.total,status:item.status,expiresAt:item.expiresAt,pdfAvailable:true});

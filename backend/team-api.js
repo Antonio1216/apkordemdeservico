@@ -25,7 +25,19 @@ function teamApi(options={}) {
   function validLogin(v){return /^[a-z0-9._-]{3,32}$/.test(v)||(v.length<=254&&/^[a-z0-9._%+-]{1,64}@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(v));}
   function validName(v){return typeof v==='string'&&v.trim().length>=3&&v.length<=140;}
   function validPassword(v){return typeof v==='string'&&v.length>=6&&v.length<=128;}
-  const safe=a=>({id:a.id,nome:a.nome,login:a.login,perfil:a.perfil,active:a.active!==false});
+  // Regras individuais persistidas na conta, nunca no armazenamento do aparelho.
+  // A falta de configuração mantém o comportamento padrão dos técnicos atuais.
+  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro'];
+  const defaults=a=>a.perfil==='Administrador'
+    ? Object.fromEntries(RIGHTS.map(k=>[k,true]))
+    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false};
+  const permissions=a=>{
+    const preset=defaults(a);
+    if(a.perfil==='Administrador')return preset;
+    return Object.fromEntries(RIGHTS.map(k=>[k,typeof a.permissions?.[k]==='boolean'?a.permissions[k]:preset[k]]));
+  };
+  const can=(a,right)=>Boolean(a)&&(a.perfil==='Administrador'||permissions(a)[right]===true);
+  const safe=a=>({id:a.id,nome:a.nome,login:a.login,perfil:a.perfil,active:a.active!==false,permissions:permissions(a)});
   function passwordHash(p,salt){return crypto.scryptSync(p,Buffer.from(salt,'hex'),64,{N:16384,r:8,p:1}).toString('hex');}
   function safeEq(a,b){const x=Buffer.from(a||'','hex'),y=Buffer.from(b||'','hex');return x.length===y.length && x.length>0 && crypto.timingSafeEqual(x,y);}
   function makeToken(acc){const payload=Buffer.from(JSON.stringify({uid:acc.id,rev:acc.rev,exp:Date.now()+8*3600*1000})).toString('base64url');return payload+'.'+crypto.createHmac('sha256',tokenKey).update(payload).digest('base64url');}
@@ -39,7 +51,12 @@ function teamApi(options={}) {
   }
   function send(res,code,obj){res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(obj));}
   async function body(req){const chunks=[];let size=0;for await(const part of req){size+=part.length;if(size>2_000_000)throw {status:413,message:'Dados excedem 2 MB.'};chunks.push(part);}try{return JSON.parse(Buffer.concat(chunks).toString());}catch{throw {status:400,message:'JSON inválido.'};}}
-  const stateFor=u=>({revision:data.workspace.revision,clients:data.workspace.clients,orders:data.workspace.orders,drafts:data.workspace.drafts,...(u.perfil==='Administrador'?{finance:data.workspace.finance}:{})});
+  const stateFor=u=>({revision:data.workspace.revision,
+    clients:can(u,'clientes')?data.workspace.clients:[],
+    orders:can(u,'ordens')?data.workspace.orders:[],
+    drafts:can(u,'ordens')?data.workspace.drafts:[],
+    ...(can(u,'financeiro')?{finance:data.workspace.finance}:{})
+  });
   function validCollection(arr,max){return Array.isArray(arr)&&arr.length<=max&&arr.every(x=>x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.id==='string'&&x.id.length>=1&&x.id.length<=100);}
   const tries=new Map();
   async function handle(req,res,pathname){
@@ -106,14 +123,23 @@ function teamApi(options={}) {
         const b=await body(req);if(!Number.isInteger(b.revision))return send(res,400,{error:'Revisão obrigatória.'});
         if(b.revision!==data.workspace.revision)return send(res,409,{error:'Outro aparelho atualizou os dados. Sincronize para evitar perda de informações.',revision:data.workspace.revision});
         if(!validCollection(b.clients,1500)||!validCollection(b.orders,3500)||!validCollection(b.drafts,250))return send(res,400,{error:'Lista inválida de clientes ou ordens.'});
-        if(actor.perfil==='Administrador' && !validCollection(b.finance,3500))return send(res,400,{error:'Lista financeira inválida.'});
+        if(can(actor,'financeiro')&&!validCollection(b.finance,3500))return send(res,400,{error:'Lista financeira inválida.'});
+        if(!can(actor,'clientes')&&b.clients.length)return send(res,403,{error:'Sem permissão para gerenciar clientes.'});
+        if(!can(actor,'ordens')&&(b.orders.length||b.drafts.length))return send(res,403,{error:'Sem permissão para gerenciar ordens de serviço.'});
+        if(!can(actor,'financeiro')&&Array.isArray(b.finance)&&b.finance.length)return send(res,403,{error:'Sem permissão para gerenciar financeiro.'});
         // Não permita que técnicos eliminem arquivos já finalizados nem clientes existentes.
         if(actor.perfil!=='Administrador'){
           const contains=(previous,next)=>previous.every(x=>next.some(y=>y.id===x.id));
-          if(!contains(data.workspace.orders,b.orders)||!contains(data.workspace.clients,b.clients))return send(res,403,{error:'Somente administradores podem excluir ordens e clientes compartilhados.'});
-          if(data.workspace.orders.some(old=>JSON.stringify(old)!==JSON.stringify(b.orders.find(x=>x.id===old.id))))return send(res,403,{error:'Somente administradores podem alterar ordens já finalizadas.'});
+          if(can(actor,'ordens')&&!contains(data.workspace.orders,b.orders))return send(res,403,{error:'Somente administradores podem excluir ordens já finalizadas.'});
+          if(can(actor,'clientes')&&!contains(data.workspace.clients,b.clients))return send(res,403,{error:'Somente administradores podem excluir clientes existentes.'});
+          if(can(actor,'ordens')&&data.workspace.orders.some(old=>JSON.stringify(old)!==JSON.stringify(b.orders.find(x=>x.id===old.id))))return send(res,403,{error:'Somente administradores podem alterar ordens já finalizadas.'});
         }
-        data.workspace={revision:data.workspace.revision+1,clients:b.clients,orders:b.orders,drafts:b.drafts,finance:actor.perfil==='Administrador'?b.finance:data.workspace.finance};
+        data.workspace={revision:data.workspace.revision+1,
+          clients:can(actor,'clientes')?b.clients:data.workspace.clients,
+          orders:can(actor,'ordens')?b.orders:data.workspace.orders,
+          drafts:can(actor,'ordens')?b.drafts:data.workspace.drafts,
+          finance:can(actor,'financeiro')?b.finance:data.workspace.finance
+        };
         writeAudit('workspace-update',actor.id);await persist();return send(res,200,stateFor(actor));
       }
       if(req.method==='POST'&&p==='users'){
@@ -125,9 +151,25 @@ function teamApi(options={}) {
         if((!existing||b.senha) && !validPassword(b.senha))return send(res,400,{error:'Senha deve ter pelo menos 6 caracteres.'});
         if(existing?.id===actor.id&&perfil!=='Administrador')return send(res,403,{error:'Você não pode remover seu próprio perfil administrador.'});
         if(existing?.perfil==='Administrador'&&perfil!=='Administrador'&&!data.accounts.some(x=>x.id!==existing.id&&x.perfil==='Administrador'&&x.active!==false))return send(res,403,{error:'Mantenha ao menos um administrador.'});
-        const a=existing||{id:crypto.randomUUID(),rev:1,active:true};Object.assign(a,{login,nome,perfil});
+        const a=existing||{id:crypto.randomUUID(),rev:1,active:true};const oldRole=a.perfil;Object.assign(a,{login,nome,perfil});
+        if(oldRole&&oldRole!==perfil){a.permissions=defaults(a);a.rev++;}
         if(b.senha){a.salt=crypto.randomBytes(16).toString('hex');a.hash=passwordHash(b.senha,a.salt);a.rev++;}
         if(!existing)data.accounts.push(a);writeAudit(existing?'user-update':'user-create',actor.id);await persist();return send(res,200,{user:safe(a)});
+      }
+      const access=p.match(/^users\/([0-9a-f-]{36})\/permissions$/i);
+      if(req.method==='PUT'&&access){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente administradores podem alterar permissões.'});
+        const target=data.accounts.find(x=>x.id===access[1]&&x.active!==false);
+        if(!target)return send(res,404,{error:'Usuário não encontrado.'});
+        if(target.perfil==='Administrador')return send(res,403,{error:'Administradores possuem todas as permissões; altere o perfil para restringir o usuário.'});
+        const incoming=(await body(req)).permissions;
+        if(!incoming||typeof incoming!=='object'||Array.isArray(incoming)||!Object.keys(incoming).length||
+          Object.keys(incoming).some(k=>!RIGHTS.includes(k)||typeof incoming[k]!=='boolean'))
+          return send(res,400,{error:'Permissões inválidas. Informe apenas opções verdadeiras ou falsas.'});
+        target.permissions={...permissions(target),...incoming};
+        target.rev++; // A sessão anterior perde validade imediatamente.
+        writeAudit('user-permissions-update',actor.id);
+        await persist();return send(res,200,{user:safe(target)});
       }
       const del=p.match(/^users\/([0-9a-f-]{36})$/i);
       if(req.method==='DELETE'&&del){
@@ -140,6 +182,6 @@ function teamApi(options={}) {
       return send(res,404,{error:'Rota não encontrada.'});
     }catch(e){console.error('Equipe API',e.message);return send(res,e.status||500,{error:e.status?e.message:'Erro interno no servidor.'});}
   }
-  return {handle,getActor:verifyToken};
+  return {handle,getActor:verifyToken,hasPermission:(req,right)=>can(verifyToken(req),right)};
 }
 module.exports={teamApi};
