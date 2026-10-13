@@ -50,6 +50,7 @@ change(html,'  <script src="app.js" defer></script>',
 css=assets/'styles.css'
 css.write_text(css.read_text(encoding='utf-8')+'''
 /* Permissoes individuais - ACR 1.7.4, tablet e acessibilidade */
+[hidden]{display:none!important}
 .permission-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}
 .permission-item{display:flex;align-items:flex-start;gap:12px;background:#f3f7fc;border:1px solid #b7c9da;border-left:4px solid #d8a02e;border-radius:10px;padding:16px;cursor:pointer;min-height:80px}
 .permission-item:has(input:checked){background:#e7f5eb;border-color:#6ea587;border-left-color:#237a50}
@@ -77,6 +78,12 @@ change(app,'''    for(const name of ['usuarios','financeiro','config','relatorio
 change(app,"el.hidden=!isAdmin();","el.hidden=!can('financeiro');")
 change(app,"if(isAdmin())db.finance=clone(team.initial.finance||[]);else db.finance=[];","if(can('financeiro'))db.finance=clone(team.initial.finance||[]);else db.finance=[];")
 change(app,"...(isAdmin()?{finance:db.finance}:{})","...(can('financeiro')?{finance:db.finance}:{})")
+change(app,"const drafts=remoteDrafts.filter(x=>x.deviceId!==deviceId);",
+           "const drafts=can('ordens')?remoteDrafts.filter(x=>x.deviceId!==deviceId):[];")
+change(app,"if(o.titulo||o.descricao)drafts.push(",
+           "if(can('ordens')&&(o.titulo||o.descricao))drafts.push(")
+change(app,"return {clients:db.clients,orders:db.orders,drafts,...(can('financeiro')?{finance:db.finance}:{})};",
+           "return {clients:can('clientes')?db.clients:[],orders:can('ordens')?db.orders:[],drafts,...(can('financeiro')?{finance:db.finance}:{})};")
 change(app,"if(isAdmin())db.finance=clone(current.finance||[]);else db.finance=[];","if(can('financeiro'))db.finance=clone(current.finance||[]);else db.finance=[];")
 change(app,'''function tab(name){if(['usuarios','financeiro','config','relatorios'].includes(name)&&!isAdmin()){toast('Acesso restrito ao administrador.',true);return;}''',
 '''function tab(name){if((name==='usuarios'||name==='config')?!isAdmin():(['financeiro','relatorios','ordens','clientes','assinaturas'].includes(name)&&!can(name))){toast('Você não tem permissão para acessar esta área.',true);return;}''')
