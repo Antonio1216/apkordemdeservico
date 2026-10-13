@@ -1,0 +1,51 @@
+      <div class="panel" id="report-equipment">
+        <h2>Inventário de equipamentos por empresa</h2>
+        <p class="hint">Empresa proprietária, tipo, número de série, IP, MAC, fabricante, modelo, local e situação.</p>
+        <div class="form-grid">
+          <label>Empresa <select id="report-eq-company"><option value="">Todas as empresas</option></select></label>
+          <label>Tipo de equipamento <select id="report-eq-type"><option value="">Todos os tipos</option></select></label>
+          <label>Situação <select id="report-eq-status"><option value="">Todas as situações</option></select></label>
+          <label>Buscar nome, série, IP ou MAC <input type="search" id="report-eq-search" placeholder="Servidor, série, IP, MAC..."></label>
+        </div>
+        <div class="report-kpis" aria-live="polite">
+          <div><small>Equipamentos</small><strong id="report-eq-count">0</strong></div>
+          <div><small>Empresas</small><strong id="report-eq-companies">0</strong></div>
+          <div><small>Tipos</small><strong id="report-eq-types-count">0</strong></div>
+        </div>
+        <div class="actions"><button type="button" class="primary" data-report-export="equipment" data-report-format="pdf">Exportar equipamentos em PDF</button><button type="button" class="outline" data-report-export="equipment" data-report-format="xlsx">Exportar Excel (.xlsx)</button></div>
+        <div class="report-scroll"><table class="report-table"><thead><tr><th>Empresa</th><th>Equipamento</th><th>Tipo</th><th>Marca/modelo</th><th>Série</th><th>IP</th><th>MAC</th><th>Local</th><th>Situação</th></tr></thead><tbody id="report-eq-body"></tbody></table></div>
+      </div>
+      <div class="panel" id="report-catalog">
+        <h2>Serviços e produtos por empresa</h2>
+        <p class="hint">Valores, códigos, unidades e quantidades cadastradas por empresa.</p>
+        <div class="form-grid">
+          <label>Empresa <select id="report-cat-company"><option value="">Todas as empresas</option></select></label>
+          <label>Categoria <select id="report-cat-kind"><option value="">Serviços e produtos</option><option value="Serviço">Somente serviços</option><option value="Produto">Somente produtos</option></select></label>
+          <label class="wide">Buscar produto ou serviço <input id="report-cat-search" type="search" placeholder="Nome, código, empresa..."></label>
+        </div>
+        <div class="report-kpis" aria-live="polite">
+          <div><small>Itens</small><strong id="report-cat-count">0</strong></div>
+          <div><small>Serviços</small><strong id="report-cat-services">0</strong></div>
+          <div><small>Produtos</small><strong id="report-cat-products">0</strong></div>
+        </div>
+        <div class="actions"><button type="button" class="primary" data-report-export="catalog" data-report-format="pdf">Exportar em PDF</button><button type="button" class="outline" data-report-export="catalog" data-report-format="xlsx">Exportar Excel (.xlsx)</button></div>
+        <div class="report-scroll"><table class="report-table"><thead><tr><th>Empresa</th><th>Categoria</th><th>Nome</th><th>Código</th><th>Unidade</th><th>Quantidade</th><th>Valor</th><th>Descrição</th></tr></thead><tbody id="report-cat-body"></tbody></table></div>
+      </div>
+      <div class="panel" id="report-travel">
+        <h2>Despesas de viagem e locomoção por OS</h2>
+        <p class="hint">Quilometragem, valor por km, abastecimento, tanque completo, hospedagem, alimentação e custo total de viagem.</p>
+        <div class="form-grid">
+          <label>De <input id="report-trip-from" type="date"></label>
+          <label>Até <input id="report-trip-to" type="date"></label>
+          <label class="wide">Ordem de Serviço <input id="report-trip-os" type="search" placeholder="Pesquisar número da OS"></label>
+        </div>
+        <div class="report-kpis" aria-live="polite">
+          <div><small>Viagens</small><strong id="report-trip-count">0</strong></div>
+          <div><small>Km rodados</small><strong id="report-trip-km">0 km</strong></div>
+          <div><small>Total</small><strong id="report-trip-total">R$ 0,00</strong></div>
+        </div>
+        <p id="report-trip-amounts" class="hint" aria-live="polite">Custos por km, abastecimento, hospedagem e alimentação.</p>
+        <div class="actions"><button type="button" class="primary" data-report-export="travel" data-report-format="pdf">Exportar despesas em PDF</button><button type="button" class="outline" data-report-export="travel" data-report-format="xlsx">Exportar Excel (.xlsx)</button></div>
+        <div class="report-scroll"><table class="report-table"><thead><tr><th>Data</th><th>OS</th><th>Veículo</th><th>Km inicial</th><th>Km atual</th><th>Km rodados</th><th>Tarifa/km</th><th>Custo/km</th><th>Abastecimento</th><th>Tanque completo</th><th>Combustível incluído</th><th>Hospedagem</th><th>Alimentação</th><th>Total</th></tr></thead><tbody id="report-trip-body"></tbody></table></div>
+      </div>
+      <div class="panel"><div class="actions"><button type="button" class="outline" id="report-ext-refresh">Atualizar dados dos relatórios</button></div><p id="report-extended-status" class="hint" role="status" aria-live="polite"></p><p class="hint">No Android, PDF corporativo e Excel .xlsx com as abas Detalhamento, Por Empresa ou OS e Indicadores.</p></div>
