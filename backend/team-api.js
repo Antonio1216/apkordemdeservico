@@ -75,6 +75,8 @@ function teamApi(options={}) {
           return send(res,400,{error:'Informe login válido e senha de 12 a 128 caracteres.'});
         const acc=data.accounts.find(a=>a.login===login&&a.perfil==='Administrador'&&a.active!==false);
         if(!acc)return send(res,404,{error:'Administrador não encontrado.'});
+        // Keep a private, on-disk snapshot before changing any account data.
+        await fs.promises.copyFile(DBFILE,DBFILE+'.pre-password-reset-'+Date.now()+'.bak');
         const salt=crypto.randomBytes(16).toString('hex');
         acc.salt=salt;acc.hash=passwordHash(senha,salt);
         acc.rev=(Number.isInteger(acc.rev)?acc.rev:0)+1; // Invalidate all previous sessions.
