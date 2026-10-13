@@ -1,4 +1,4 @@
-name: ACR OS Pro v1.7.6 - Despesas de Viagem
+name: ACR OS Pro v1.7.7 - Relatorios Corporativos
 
 on:
   pull_request:
@@ -11,6 +11,11 @@ on:
       - 'scripts/catalog-v175.js'
       - 'scripts/add-travel-v176.py'
       - 'scripts/travel-v176.js'
+      - 'scripts/add-reports-v177.py'
+      - 'scripts/reports-v177.js'
+      - 'scripts/reports-panel-v177.html'
+      - 'scripts/ExtendedReportExport-v177.kt'
+      - 'backend/report-analytics.js'
       - 'backend/travel.js'
   push:
     branches: [main]
@@ -23,6 +28,11 @@ on:
       - 'scripts/catalog-v175.js'
       - 'scripts/add-travel-v176.py'
       - 'scripts/travel-v176.js'
+      - 'scripts/add-reports-v177.py'
+      - 'scripts/reports-v177.js'
+      - 'scripts/reports-panel-v177.html'
+      - 'scripts/ExtendedReportExport-v177.kt'
+      - 'backend/report-analytics.js'
       - 'backend/travel.js'
   workflow_dispatch:
 
@@ -52,13 +62,16 @@ jobs:
           python scripts/add-user-permissions-v174.py ospro-eletrica-software
           python scripts/add-catalog-v175.py ospro-eletrica-software
           python scripts/add-travel-v176.py ospro-eletrica-software
+          python scripts/add-reports-v177.py ospro-eletrica-software
+          node --check ospro-eletrica-software/app/src/main/assets/reports.js
+          node --check ospro-eletrica-software/app/src/main/assets/report-model.js
           node --check ospro-eletrica-software/app/src/main/assets/travel-core.js
           node --check ospro-eletrica-software/app/src/main/assets/travel.js
           node --check ospro-eletrica-software/app/src/main/assets/catalog.js
           node --check ospro-eletrica-software/app/src/main/assets/auth.js
           node --check ospro-eletrica-software/app/src/main/assets/permissions.js
           node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'versionName = "1.7.6"' ospro-eletrica-software/app/build.gradle.kts
+          grep -q 'versionName = "1.7.7"' ospro-eletrica-software/app/build.gradle.kts
           python - <<'PY'
           from pathlib import Path
           root=Path('ospro-eletrica-software/app/src/main')
@@ -68,6 +81,16 @@ jobs:
           assert (root/'assets/catalog.js').exists()
           assert (root/'assets/travel-core.js').exists()
           assert (root/'assets/travel.js').exists()
+          assert (root/'assets/reports.js').exists()
+          assert (root/'assets/report-model.js').exists()
+          assert 'id="report-equipment"' in h
+          assert 'id="report-travel"' in h
+          assert 'id="report-catalog"' in h
+          assert 'data-report-export="equipment"' in h
+          assert 'data-report-export="travel"' in h
+          assert (root/'java/br/com/ospro/ordens/ExtendedReportExport.kt').exists()
+          assert 'ExtendedReportExport.writePdf' in code
+          assert 'ExtendedReportExport.writeXlsx' in code
           assert 'id="trip-form"' in h
           assert 'name="kmInicial"' in h and 'name="kmAtual"' in h
           assert 'name="abastecimento"' in h and 'name="tanqueCompleto"' in h
@@ -120,7 +143,7 @@ jobs:
       - name: Disponibilizar APK corrigido
         uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.6-Despesas-Viagem-APK
+          name: ACR-OS-Pro-v1.7.7-Relatorios-APK
           path: ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error
@@ -132,14 +155,14 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile, ZIP_DEFLATED
           root=Path('ospro-eletrica-software')
-          with ZipFile('ACR-OS-Pro-v1.7.6-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
+          with ZipFile('ACR-OS-Pro-v1.7.7-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
               for item in root.rglob('*'):
                   if item.is_file() and not {'.gradle','build','.idea'}.intersection(item.parts):
                       archive.write(item)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.6-Fonte
-          path: ACR-OS-Pro-v1.7.6-Fonte.zip
+          name: ACR-OS-Pro-v1.7.7-Fonte
+          path: ACR-OS-Pro-v1.7.7-Fonte.zip
           retention-days: 30
           if-no-files-found: error
