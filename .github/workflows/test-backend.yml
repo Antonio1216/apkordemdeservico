@@ -22,6 +22,8 @@ jobs:
         run: |
           node --check backend/team-api.js
           node --check backend/server.js
+      - name: Verificar script do Termux
+        run: bash -n scripts/recuperar-admin-termux.sh
       - name: Executar testes do servidor
         working-directory: backend
         run: npm test
