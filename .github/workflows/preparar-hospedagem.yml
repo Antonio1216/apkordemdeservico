@@ -1,0 +1,54 @@
+name: Preparar backend para hospedagem definitiva
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/preparar-hospedagem.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  preparar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obter projeto
+        uses: actions/checkout@v4
+
+      - name: Reconstituir backend v1.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q OSPro-Eletrica-Software-Fonte.zip
+          base64 --decode scripts/ospro-v1.6-patch.tgz.b64 > /tmp/ospro-v16.tgz
+          echo '4dfd83a3d7cd5ec538d599d0d7a840bcc2511c3f9da31efd4339fc3c2c41fc4e  /tmp/ospro-v16.tgz' | sha256sum -c -
+          tar -xzf /tmp/ospro-v16.tgz -C ospro-eletrica-software
+          base64 --decode scripts/ospro-v1.7-overlay.tgz.b64 > /tmp/ospro-v17.tgz
+          echo '4d9776c030443ce84ca5fced0794319846e27588b37107a6926e71feca6998d8  /tmp/ospro-v17.tgz' | sha256sum -c -
+          tar -xzf /tmp/ospro-v17.tgz -C ospro-eletrica-software
+          mkdir -p backend/public backend/tests
+          cp ospro-eletrica-software/server/{server.js,team-api.js,pdf.js,package.json} backend/
+          cp ospro-eletrica-software/server/public/{sign.html,sign.js} backend/public/
+          cp ospro-eletrica-software/server/tests/*.js backend/tests/
+          cp ospro-eletrica-software/server/tests/*.b64 backend/tests/
+          node --check backend/server.js
+          node --check backend/team-api.js
+          node --check backend/pdf.js
+          test -s render.yaml
+
+      - name: Testar login, assinaturas e PDF
+        run: cd backend && npm test
+
+      - name: Publicar arquivos backend no GitHub
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backend/
+          if ! git diff --cached --quiet; then
+            git commit -m "Disponibilizar API OS Pro v1.7 para hospedagem persistente"
+            git push
+          fi
