@@ -6,6 +6,26 @@ window.OSAuth.ready.then(()=>{
   const form=$('#trip-form'),status=$('#trip-status');
   const amount=(name)=>form.elements.namedItem(name).value;
   const money=x=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(x||0);
+  const formatDate=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());};
+  function augmentFinanceList(){
+    for(const button of document.querySelectorAll('#finance-list [data-del-fin]')){
+      const entry=window.OSFinance?.findTravel(button.dataset.delFin);
+      if(!entry||button.closest('.item').querySelector('[data-edit-trip]'))continue;
+      const parent=button.closest('.item');
+      const detail=document.createElement('small');
+      const t=entry.viagem;
+      detail.className='travel-entry';
+      detail.textContent='Veículo: '+(t.veiculo||'Não informado')+' • '+t.kmRodados+' km ('+t.kmInicial+' → '+t.kmAtual+') • '+money(t.tarifaKm)+'/km • Abastecimento: '+money(t.abastecimento)+' ('+(t.tanqueCompleto?'tanque completo':'parcial')+(t.incluirAbastecimento?', incluído':', não somado')+') • Hospedagem: '+money(t.hospedagem)+' • Alimentação: '+money(t.alimentacao);
+      parent.firstElementChild.append(detail);
+      const edit=document.createElement('button');
+      edit.type='button';edit.className='outline';edit.dataset.editTrip=entry.id;
+      edit.textContent='Editar viagem';
+      button.parentElement.insertBefore(edit,button);
+    }
+  }
+  const financeList=$('#finance-list');
+  new MutationObserver(augmentFinanceList).observe(financeList,{childList:true});
+  augmentFinanceList();
   function read(){
     return window.ACRTravel.calculateTravel({
       kmInicial:amount('kmInicial'),kmAtual:amount('kmAtual'),tarifaKm:amount('tarifaKm'),
@@ -33,7 +53,8 @@ window.OSAuth.ready.then(()=>{
   function clearForm(){
     form.reset();
     form.elements.namedItem('id').value='';
-    form.elements.namedItem('data').value=new Date().toLocaleDateString('en-CA');
+    form.elements.namedItem('data').value=formatDate();
+    form.elements.namedItem('osNumero').placeholder=window.OSFinance.currentOs();
     $('#trip-submit').textContent='Salvar despesa de viagem';
     status.textContent='';status.classList.remove('trip-error');
     refresh();
