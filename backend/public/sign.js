@@ -26,11 +26,12 @@ async function locate(){
 }
 $('retry-location').onclick=locate;
 const pdfUrl=base+'/document.pdf';
-function setDownload(){ $('download-pdf').href=pdfUrl; }
+function setDownload(url=pdfUrl){ $('download-pdf').href=url; }
 async function load(){
   try{
     const res=await fetch(base,{cache:'no-store'}),item=await res.json();if(!res.ok)throw Error(item.error||'Link inválido');
     $('summary').replaceChildren();
+    $('brand-company').textContent=item.companyName||'ACR Suporte em T.I';
     addRow('Empresa',item.companyName||'OS PRO');addRow('OS',item.orderNumber);addRow('Cliente',item.clientName);addRow('Serviço',item.serviceTitle);
     const fields=[['Tipo',item.details?.type],['Responsável técnico',item.details?.technician],['Descrição',item.details?.description||item.summary],['Diagnóstico',item.details?.diagnosis],['Execução',item.details?.execution],['Materiais',item.details?.materials]];
     for(const [label,value] of fields)if(value)addRow(label,value);
@@ -49,9 +50,12 @@ $('send').onclick=async()=>{
   try{
     const res=await fetch(base+'/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:$('name').value.trim(),accepted:true,image:signatureImage(),location:geoLocation})});
     const body=await res.json();if(!res.ok)throw Error(body.error||'Falha ao assinar');
-    document.body.classList.add('signed');$('formbox-sign').style.display='none';$('geobox').style.display='none';setDownload();
-    // The client actively chooses where to save the file using this button.
+    if(typeof body.pdfUrl!=='string'||!/^\/api\/receipt\/[A-Za-z0-9_-]{40,90}\/document[.]pdf$/.test(body.pdfUrl))throw Error('Assinatura salva, mas não foi possível identificar o PDF.');
+    document.body.classList.add('signed');$('formbox-sign').style.display='none';$('geobox').style.display='none';
+    $('preview-pdf').hidden=true;setDownload(body.pdfUrl);
     $('done').scrollIntoView({behavior:'smooth'});
+    // Redirecionar na mesma aba evita bloqueios de pop-up comuns em Android.
+    window.location.assign(body.pdfUrl);
   }catch(err){already=false;valid();$('status').textContent=err.message;}
 };
 window.addEventListener('resize',resize);resize();load();

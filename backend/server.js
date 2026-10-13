@@ -33,6 +33,8 @@ function entryByToken(token){if(!/^[A-Za-z0-9_-]{40,90}$/.test(token))return nul
 const esc=x=>String(x||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const signPage=fs.readFileSync(path.join(__dirname,'public','sign.html'),'utf8');
 const publicJs=fs.readFileSync(path.join(__dirname,'public','sign.js'),'utf8');
+const officialLogo=fs.readFileSync(path.join(__dirname,'public','brand','acr-logo.jpg'));
+function receiptByToken(token){if(!/^[A-Za-z0-9_-]{40,90}$/.test(token))return null;const receiptHash=hash(token);return Object.values(records).find(r=>r.pdfReceiptHash===receiptHash&&r.status==='signed')||null;}
 const attempts=new Map();
 function allowed(req){const ip=req.socket.remoteAddress||'unknown',at=Date.now(),arr=(attempts.get(ip)||[]).filter(x=>x>at-60000);arr.push(at);attempts.set(ip,arr);if(attempts.size>3000)attempts.clear();return arr.length<80;}
 const server=http.createServer(async(req,res)=>{
@@ -45,7 +47,22 @@ const server=http.createServer(async(req,res)=>{
     if(p.startsWith('/api/team/'))return await team.handle(req,res,p);
     if(req.method==='GET'&&p==='/health')return json(res,200,{ok:true,service:'OS Pro assinatura remota'});
     if(req.method==='GET'&&p==='/sign.js')return text(res,200,publicJs,'application/javascript; charset=utf-8');
-    if(req.method==='GET'&&/^\/s\/[\w-]+$/.test(p))return text(res,200,signPage,'text/html; charset=utf-8');
+    if(req.method==='GET'&&p==='/brand/acr-logo.jpg'){headers(res,200,{'Content-Type':'image/jpeg'});return res.end(officialLogo);}
+    if(req.method==='GET'&&/^\/s\/[\w-]+$/.test(p)){
+      const item=entryByToken(p.split('/').pop());
+      if(!item)return json(res,404,{error:'Link inexistente.'});
+      if(item.status==='signed')return text(res,410,'<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Assinatura concluída | ACR</title><body style="font:18px system-ui;max-width:620px;margin:50px auto;padding:24px;color:#102d4e"><h1>ACR Suporte em T.I</h1><h2>Link de assinatura encerrado</h2><p>Esta ordem de serviço já foi assinada. Por segurança, o link enviado não pode ser utilizado novamente.</p><p>Solicite a cópia do PDF à empresa.</p></body></html>','text/html; charset=utf-8');
+      if(item.status==='expired'||Date.now()>Date.parse(item.expiresAt))return json(res,410,{error:'Link expirado.'});
+      return text(res,200,signPage,'text/html; charset=utf-8');
+    }
+    const receipt=p.match(/^\/api\/receipt\/([A-Za-z0-9_-]{40,90})\/document[.]pdf$/);
+    if(req.method==='GET'&&receipt){
+      const item=receiptByToken(receipt[1]);
+      if(!item)return json(res,404,{error:'Comprovante não encontrado.'});
+      const file=path.join(PDFDIR,item.id+'.pdf');
+      const data=await fs.promises.readFile(file);
+      return pdfResponse(res,data,`OS-${item.orderNumber.replace(/[^A-Za-z0-9_-]/g,'_')}-assinada.pdf`,false);
+    }
     if(req.method==='POST'&&p==='/api/sign-requests'){
       if(!authorised(req))return json(res,401,{error:'Chave administrativa inválida.'});
       const body=await getBody(req);
@@ -70,7 +87,7 @@ const server=http.createServer(async(req,res)=>{
     const priv=p.match(/^\/api\/sign-requests\/([0-9a-f-]{36})$/i);
     if(req.method==='GET'&&priv){if(!authorised(req))return json(res,401,{error:'Chave administrativa inválida.'});const item=records[priv[1]];if(!item)return json(res,404,{error:'Assinatura não encontrada.'});return json(res,200,{id:item.id,status:item.status,signature:item.signature,expiresAt:item.expiresAt});}
     const pub=p.match(/^\/api\/public\/([A-Za-z0-9_-]{40,90})(\/(?:sign|location|document[.]pdf))?$/);
-    if(pub){const item=entryByToken(pub[1]);if(!item)return json(res,404,{error:'Link inexistente.'});if(item.status==='pending'&&Date.now()>Date.parse(item.expiresAt)){item.status='expired';await persist();}
+    if(pub){const item=entryByToken(pub[1]);if(!item)return json(res,404,{error:'Link inexistente.'});if(item.status==='signed')return json(res,410,{error:'Link de assinatura encerrado: assinatura já registrada.'});if(item.status==='pending'&&Date.now()>Date.parse(item.expiresAt)){item.status='expired';await persist();}
       if(req.method==='GET'&&!pub[2])return json(res,200,{orderNumber:item.orderNumber,clientName:item.clientName,serviceTitle:item.serviceTitle,companyName:item.companyName||'OS PRO',details:item.details||{},summary:item.summary,total:item.total,status:item.status,expiresAt:item.expiresAt,pdfAvailable:true});
       if(req.method==='GET'&&pub[2]==='/document.pdf'){
         if(item.status==='expired')return json(res,410,{error:'Link expirado. Solicite outro documento ao responsável.'});
@@ -95,11 +112,14 @@ const server=http.createServer(async(req,res)=>{
         const signedAt=new Date().toISOString();
         item.signature={name:body.name.trim(),image:body.image,signedAt,location,source:'remote',audit:hash(`${item.id}|${signedAt}|${hash(body.image)}`),imageSha256:hash(body.image),ipHash:hash(KEY+String(req.socket.remoteAddress||'')),userAgent:String(req.headers['user-agent']||'').slice(0,260)};
         item.status='signed';
+        // O link de assinatura deixa de funcionar. O PDF usa um recibo separado, impossível de deduzir a partir do link enviado.
+        const pdfReceipt=crypto.randomBytes(32).toString('base64url');
+        item.pdfReceiptHash=hash(pdfReceipt);
         // Persist an individual signed PDF copy before confirming success to the client.
         const pdf=makePdf(item);
         await fs.promises.mkdir(PDFDIR,{recursive:true,mode:0o700});
         await fs.promises.writeFile(path.join(PDFDIR,item.id+'.pdf'),pdf,{mode:0o600});
-        await persist();return json(res,200,{ok:true,signedAt,audit:item.signature.audit,pdfUrl:`/api/public/${pub[1]}/document.pdf`});
+        await persist();return json(res,200,{ok:true,signedAt,audit:item.signature.audit,pdfUrl:`/api/receipt/${pdfReceipt}/document.pdf`});
       }
     }
     return json(res,404,{error:'Rota não encontrada.'});
