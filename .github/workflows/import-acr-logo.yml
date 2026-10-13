@@ -1,0 +1,37 @@
+name: Preparar logomarca oficial ACR no backend
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/import-acr-logo.yml'
+permissions:
+  contents: write
+jobs:
+  import-logo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/corporate-signature-pdf-and-link
+          persist-credentials: true
+      - name: Extrair logomarca do APK e incluir no servidor
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q OSPro-Eletrica-Software-Fonte.zip
+          base64 --decode scripts/ospro-v1.6-patch.tgz.b64 > /tmp/ospro-v16.tgz
+          tar -xzf /tmp/ospro-v16.tgz -C ospro-eletrica-software
+          base64 --decode scripts/ospro-v1.7-overlay.tgz.b64 > /tmp/ospro-v17.tgz
+          tar -xzf /tmp/ospro-v17.tgz -C ospro-eletrica-software
+          source='ospro-eletrica-software/app/src/main/assets/brand/acr-logo.jpg'
+          test -s "$source"
+          mkdir -p backend/public/brand
+          cp "$source" backend/public/brand/acr-logo.jpg
+          file backend/public/brand/acr-logo.jpg
+          wc -c backend/public/brand/acr-logo.jpg
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/public/brand/acr-logo.jpg
+          if ! git diff --cached --quiet; then
+            git commit -m "Importar logo ACR original do aplicativo para o portal"
+            git push origin HEAD:fix/corporate-signature-pdf-and-link
+          fi
