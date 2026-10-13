@@ -15,6 +15,9 @@ function teamApi(options={}) {
   data.workspace||={revision:0,clients:[],orders:[],drafts:[],finance:[]};
   for(const type of ['clients','orders','drafts','finance'])data.workspace[type]||=[];
   data.audit||=[];
+  // Coleção separada das OS: a atualização de uma OS não sobrescreve o catálogo.
+  data.catalog||={revision:0,services:[],products:[],equipments:[]};
+  for(const collection of ['services','products','equipments'])data.catalog[collection]||=[];
   let writeQueue=Promise.resolve();
   async function persist(){const snapshot=JSON.stringify(data);writeQueue=writeQueue.catch(()=>{}).then(async()=>{
     await fs.promises.mkdir(path.dirname(DBFILE),{recursive:true,mode:0o700});
@@ -27,10 +30,10 @@ function teamApi(options={}) {
   function validPassword(v){return typeof v==='string'&&v.length>=6&&v.length<=128;}
   // Regras individuais persistidas na conta, nunca no armazenamento do aparelho.
   // A falta de configuração mantém o comportamento padrão dos técnicos atuais.
-  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro'];
+  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro','catalogo'];
   const defaults=a=>a.perfil==='Administrador'
     ? Object.fromEntries(RIGHTS.map(k=>[k,true]))
-    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false};
+    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false,catalogo:false};
   const permissions=a=>{
     const preset=defaults(a);
     if(a.perfil==='Administrador')return preset;
@@ -58,6 +61,43 @@ function teamApi(options={}) {
     ...(can(u,'financeiro')?{finance:data.workspace.finance}:{})
   });
   function validCollection(arr,max){return Array.isArray(arr)&&arr.length<=max&&arr.every(x=>x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.id==='string'&&x.id.length>=1&&x.id.length<=100);}
+  const catalogText=(x,max=200)=>typeof x==='string'&&x.length<=max;
+  const serialOK=s=>typeof s==='string'&&s.length<=120;
+  const ipOK=ip=>!ip||(/^[a-f0-9:.]+$/i.test(ip)&&ip.length<=45);
+  const macOK=mac=>!mac||/^(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}$/i.test(mac);
+  const idOK=x=>typeof x==='string'&&x.length>=1&&x.length<=100;
+  function validateCatalog(input){
+    if(!input||typeof input!=='object'||!Number.isInteger(input.revision))return 'Revisão obrigatória.';
+    const limits={services:1000,products:2000,equipments:3000};
+    for(const [kind,max] of Object.entries(limits)){
+      const arr=input[kind];if(!Array.isArray(arr)||arr.length>max)return 'Lista inválida ou muito extensa: '+kind;
+      const ids=new Set();
+      for(const o of arr){
+        if(!o||typeof o!=='object'||Array.isArray(o)||!idOK(o.id)||ids.has(o.id))return 'IDs duplicados ou inválidos.';
+        ids.add(o.id);
+        if(!catalogText(o.nome,180)||!o.nome.trim()||!catalogText(o.descricao||'',1200))return 'Preencha o nome do item corretamente.';
+        if(o.empresaId && (!idOK(o.empresaId)||!data.workspace.clients.some(x=>x.id===o.empresaId)))return 'Empresa vinculada não encontrada no cadastro de Clientes.';
+        if(kind!=='equipments'){
+          if(!Number.isFinite(o.valor)||o.valor<0||o.valor>100000000)return 'Valor inválido para produto ou serviço.';
+          if(!catalogText(o.unidade||'',50)||!catalogText(o.codigo||'',120))return 'Dados de produto/serviço inválidos.';
+          if(kind==='products'&&(!Number.isFinite(o.quantidade)||o.quantidade<0||o.quantidade>10000000))return 'Quantidade inválida.';
+        }else{
+          if(!o.empresaId)return 'Selecione a empresa proprietária do equipamento.';
+          if(!catalogText(o.tipo,120)||!o.tipo.trim()||!serialOK(o.serie||'')||!ipOK(o.ip||'')||!macOK(o.mac||''))return 'Tipo, número de série, IP ou MAC inválido.';
+          for(const name of ['fabricante','modelo','local','status','observacoes'])if(!catalogText(o[name]||'',name==='observacoes'?1200:160))return 'Campo de equipamento muito extenso.';
+        }
+      }
+    }
+    const seen=new Set();
+    for(const e of input.equipments){
+      const serial=(e.serie||'').trim().toLowerCase();
+      if(!serial)continue;
+      const key=e.empresaId+'|'+serial;
+      if(seen.has(key))return 'Número de série duplicado para a mesma empresa.';
+      seen.add(key);
+    }
+    return null;
+  }
   const tries=new Map();
   async function handle(req,res,pathname){
     if(!pathname.startsWith('/api/team/'))return false;
@@ -118,6 +158,18 @@ function teamApi(options={}) {
       const actor=verifyToken(req);if(!actor)return send(res,401,{error:'Sessão inválida ou expirada. Entre novamente.'});
       if(req.method==='GET'&&p==='me')return send(res,200,{account:safe(actor)});
       if(req.method==='GET'&&p==='users')return send(res,200,{users:data.accounts.filter(x=>x.active!==false).map(safe)});
+      if(p==='catalog'){
+        if(!can(actor,'catalogo'))return send(res,403,{error:'Sem permissão para o catálogo e equipamentos.'});
+        if(req.method==='GET')return send(res,200,{...data.catalog,companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome}))});
+        if(req.method==='PUT'){
+          const b=await body(req),err=validateCatalog(b);
+          if(err)return send(res,400,{error:err});
+          if(b.revision!==data.catalog.revision)return send(res,409,{error:'Catálogo alterado em outro aparelho. Atualize antes de salvar.',revision:data.catalog.revision});
+          data.catalog={revision:data.catalog.revision+1,services:b.services,products:b.products,equipments:b.equipments};
+          writeAudit('catalog-update',actor.id);await persist();
+          return send(res,200,{...data.catalog,companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome}))});
+        }
+      }
       if(req.method==='GET'&&p==='workspace')return send(res,200,stateFor(actor));
       if(req.method==='PUT'&&p==='workspace'){
         const b=await body(req);if(!Number.isInteger(b.revision))return send(res,400,{error:'Revisão obrigatória.'});
@@ -134,6 +186,9 @@ function teamApi(options={}) {
           if(can(actor,'clientes')&&!contains(data.workspace.clients,b.clients))return send(res,403,{error:'Somente administradores podem excluir clientes existentes.'});
           if(can(actor,'ordens')&&data.workspace.orders.some(old=>JSON.stringify(old)!==JSON.stringify(b.orders.find(x=>x.id===old.id))))return send(res,403,{error:'Somente administradores podem alterar ordens já finalizadas.'});
         }
+        // Não exclua empresa com equipamentos vinculados sem antes transferi-los.
+        const kept=new Set((can(actor,'clientes')?b.clients:data.workspace.clients).map(x=>x.id));
+        if(data.catalog.equipments.some(x=>!kept.has(x.empresaId)))return send(res,409,{error:'Há equipamento vinculado a empresa removida. Transfira o equipamento antes de excluir a empresa.'});
         data.workspace={revision:data.workspace.revision+1,
           clients:can(actor,'clientes')?b.clients:data.workspace.clients,
           orders:can(actor,'ordens')?b.orders:data.workspace.orders,
