@@ -20,7 +20,8 @@ test('link: authorise, create, sign only once, return audit and data',async()=>{
   const logo=await fetch(url+'/brand/acr-logo.jpg');assert.equal(logo.status,200);assert.equal(logo.headers.get('content-type'),'image/jpeg');assert.ok((await logo.arrayBuffer()).byteLength>2000);
   const preview=await (await fetch(url+'/api/public/'+token)).json();assert.equal(preview.status,'pending');assert.equal(preview.total,100);
   const invalid=await fetch(url+'/api/public/'+token+'/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Cliente',accepted:false,image:'data:image/png;base64,'+'A'.repeat(150)})});assert.equal(invalid.status,400);
-  const signed=await fetch(url+'/api/public/'+token+'/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Cliente Exemplo',accepted:true,image:'data:image/png;base64,'+'A'.repeat(150),location:{lat:-3.73,lon:-38.52,accuracy:20}})});assert.equal(signed.status,200);
+  const validPicture='data:image/jpeg;base64,'+fs.readFileSync(path.join(__dirname,'../public/brand/acr-logo.jpg')).toString('base64');
+  const signed=await fetch(url+'/api/public/'+token+'/sign',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'Cliente Exemplo',accepted:true,image:validPicture,location:{lat:-3.73,lon:-38.52,accuracy:20}})});assert.equal(signed.status,200);
   const signedBody=await signed.json();assert.ok(signedBody.pdfUrl.startsWith('/api/receipt/'));
   const receiptResponse=await fetch(url+signedBody.pdfUrl);assert.equal(receiptResponse.status,200);
   assert.equal(receiptResponse.headers.get('content-type'),'application/pdf');
@@ -28,6 +29,7 @@ test('link: authorise, create, sign only once, return audit and data',async()=>{
   const pdfData=Buffer.from(await receiptResponse.arrayBuffer());
   assert.ok(pdfData.subarray(0,8).toString().startsWith('%PDF-1.'));
   assert.ok(pdfData.includes(Buffer.from('/Brand')));
+  assert.ok(pdfData.includes(Buffer.from('/Sig')));
   assert.ok(pdfData.includes(Buffer.from('ACR Suporte em T.I')));
   assert.ok(pdfData.includes(Buffer.from('/Image')));
   assert.equal((await fetch(url+'/api/public/'+token+'/document.pdf')).status,410);
