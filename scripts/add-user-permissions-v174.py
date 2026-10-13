@@ -67,11 +67,11 @@ app=assets/'app.js'
 change(app,"  const isAdmin=()=>window.OSAuth.isAdmin();",
            "  const isAdmin=()=>window.OSAuth.isAdmin();\n  const can=permission=>window.OSAuth.can(permission);")
 change(app,'''    for(const name of ['usuarios','financeiro','config','relatorios']){
-      const nav=document.querySelector(\`[data-tab="\${name}"]\`);
+      const nav=document.querySelector(`[data-tab="${name}"]`);
       if(nav)nav.hidden=!isAdmin();
     }''',
 '''    for(const name of ['usuarios','financeiro','config','relatorios','ordens','clientes','assinaturas']){
-      const nav=document.querySelector(\`[data-tab="\${name}"]\`);
+      const nav=document.querySelector(`[data-tab="${name}"]`);
       if(nav)nav.hidden=!((name==='usuarios'||name==='config')?isAdmin():can(name));
     }''')
 change(app,"el.hidden=!isAdmin();","el.hidden=!can('financeiro');")
