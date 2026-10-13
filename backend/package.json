@@ -1,0 +1,12 @@
+{
+  "name": "ospro-sign-link-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Servidor de assinatura remota de ordens de serviço OS Pro (Node.js sem dependências)",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "engines": {"node": ">=20"}
+}
