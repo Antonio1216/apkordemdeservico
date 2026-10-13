@@ -27,6 +27,8 @@ jobs:
       - name: Executar testes do servidor
         working-directory: backend
         run: npm test
+      - name: Instalar ferramentas para inspeção do PDF
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
       - name: Verificar PDF corporativo com Poppler
         shell: bash
         run: |
