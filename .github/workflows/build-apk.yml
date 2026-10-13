@@ -1,10 +1,12 @@
-name: Compilar ACR OS Pro v1.6 - Relatorios e GPS
+name: Compilar ACR OS Pro v1.7.1 - Usuarios centralizados
 on:
   push:
     branches: [main]
     paths:
       - .github/workflows/build-apk.yml
       - scripts/ospro-v1.6-patch.tgz.b64
+      - scripts/ospro-v1.7-overlay.tgz.b64
+      - scripts/patch-users-v1.7.1.py
       - OSPro-Eletrica-Software-Fonte.zip
   workflow_dispatch:
 
@@ -32,6 +34,14 @@ jobs:
           grep -q 'id="report-client"' ospro-eletrica-software/app/src/main/assets/index.html
           grep -q 'id="capture-sign-gps"' ospro-eletrica-software/app/src/main/assets/index.html
           grep -q 'versionName = "1.6.0"' ospro-eletrica-software/app/build.gradle.kts
+          base64 --decode scripts/ospro-v1.7-overlay.tgz.b64 > /tmp/ospro-patch-v17.tgz
+          echo '4d9776c030443ce84ca5fced0794319846e27588b37107a6926e71feca6998d8  /tmp/ospro-patch-v17.tgz' | sha256sum -c -
+          tar -xzf /tmp/ospro-patch-v17.tgz -C ospro-eletrica-software
+          python scripts/patch-users-v1.7.1.py ospro-eletrica-software
+          node --check ospro-eletrica-software/app/src/main/assets/app.js
+          node --check ospro-eletrica-software/app/src/main/assets/auth.js
+          grep -q 'window.OSAuth.list().find' ospro-eletrica-software/app/src/main/assets/app.js
+          grep -q 'versionName = "1.7.1"' ospro-eletrica-software/app/build.gradle.kts
           cd ospro-eletrica-software/server && npm test
 
       - name: Java 17
@@ -62,7 +72,7 @@ jobs:
       - name: APK para download
         uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.6-APK
+          name: ACR-OS-Pro-v1.7.1-APK
           path: ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -74,7 +84,7 @@ jobs:
           from zipfile import ZipFile,ZIP_DEFLATED
           from pathlib import Path
           root=Path('ospro-eletrica-software')
-          with ZipFile('ACR-OS-Pro-v1.6-Fonte.zip','w',ZIP_DEFLATED) as z:
+          with ZipFile('ACR-OS-Pro-v1.7.1-Fonte.zip','w',ZIP_DEFLATED) as z:
               for p in root.rglob('*'):
                   if p.is_file() and not {'.gradle','build','.idea'}.intersection(p.parts):
                       z.write(p)
@@ -82,7 +92,7 @@ jobs:
       - name: Fonte para download
         uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.6-Fonte
-          path: ACR-OS-Pro-v1.6-Fonte.zip
+          name: ACR-OS-Pro-v1.7.1-Fonte
+          path: ACR-OS-Pro-v1.7.1-Fonte.zip
           if-no-files-found: error
           retention-days: 30
