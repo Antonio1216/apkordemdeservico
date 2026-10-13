@@ -27,3 +27,31 @@ jobs:
       - name: Executar testes do servidor
         working-directory: backend
         run: npm test
+      - name: Verificar PDF corporativo com Poppler
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('node:fs');
+          const {makePdf}=require('./backend/pdf');
+          const signature='data:image/jpeg;base64,'+fs.readFileSync('./backend/public/brand/acr-logo.jpg').toString('base64');
+          const sample={companyName:'ACR Suporte em T.I',orderNumber:'OS-TESTE-0001',clientName:'Cliente de Teste',serviceTitle:'Revisão de infraestrutura',details:{type:'Elétrica',technician:'Responsável Técnico',description:'Verificação do sistema',diagnosis:'Avaliação de componentes',execution:'Manutenção preventiva',materials:'Equipamentos revisados',labor:300,materialsCost:45,travel:0,discount:0},total:345,status:'signed',signature:{name:'Assinante de Teste',image:signature,signedAt:new Date().toISOString(),location:{lat:-3.73,lon:-38.52,accuracy:20},audit:'a'.repeat(64)}};
+          fs.writeFileSync('/tmp/acr-corporativo.pdf',makePdf(sample));
+          NODE
+          pdfinfo /tmp/acr-corporativo.pdf | tee /tmp/acr-info.txt
+          pdftotext -layout /tmp/acr-corporativo.pdf /tmp/acr-texto.txt
+          grep -q 'ACR Suporte em T.I' /tmp/acr-texto.txt
+          grep -q 'Assinante de Teste' /tmp/acr-texto.txt
+          grep -q 'VALOR TOTAL' /tmp/acr-texto.txt
+          pdfimages -list /tmp/acr-corporativo.pdf | tee /tmp/acr-imagens.txt
+          test "$(awk 'NR>2 && NF>3 {n++} END{print n+0}' /tmp/acr-imagens.txt)" -ge 2
+          pdftoppm -f 1 -l 1 -scale-to 1000 -png -singlefile /tmp/acr-corporativo.pdf /tmp/acr-corporativo
+      - name: Disponibilizar PDF de exemplo para revisão visual
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACR-PDF-Modelo-Corporativo
+          path: |
+            /tmp/acr-corporativo.pdf
+            /tmp/acr-corporativo.png
+          retention-days: 14
+
