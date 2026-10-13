@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const {calculateTravel} = require('./travel');
 
 function teamApi(options={}) {
   const KEY=String(options.key||'');
@@ -176,6 +177,27 @@ function teamApi(options={}) {
         if(b.revision!==data.workspace.revision)return send(res,409,{error:'Outro aparelho atualizou os dados. Sincronize para evitar perda de informações.',revision:data.workspace.revision});
         if(!validCollection(b.clients,1500)||!validCollection(b.orders,3500)||!validCollection(b.drafts,250))return send(res,400,{error:'Lista inválida de clientes ou ordens.'});
         if(can(actor,'financeiro')&&!validCollection(b.finance,3500))return send(res,400,{error:'Lista financeira inválida.'});
+        if(can(actor,'financeiro')){
+          for(const expense of b.finance){
+            if(expense.categoria!=='viagem')continue;
+            const t=expense.viagem;
+            if(expense.tipo!=='despesa'||!t||typeof t!=='object'||
+              !/^\\d{4}-\\d{2}-\\d{2}$/.test(String(expense.data||''))||
+              typeof expense.osNumero!=='string'||expense.osNumero.length>120||
+              typeof expense.descricao!=='string'||expense.descricao.length>220||
+              typeof t.tanqueCompleto!=='boolean'||typeof t.incluirAbastecimento!=='boolean'){
+              return send(res,400,{error:'Lançamento de viagem inválido.'});
+            }
+            try{
+              const expected=calculateTravel(t);
+              if(!Number.isFinite(expense.valor)||Math.abs(expense.valor-expected.total)>0.001||
+                Math.abs(t.kmRodados-expected.kmRodados)>0.001||
+                Math.abs(t.custoKm-expected.custoKm)>0.001){
+                return send(res,400,{error:'Total de viagem ou km rodados incorreto.'});
+              }
+            }catch(err){return send(res,400,{error:err.message});}
+          }
+        }
         if(!can(actor,'clientes')&&b.clients.length)return send(res,403,{error:'Sem permissão para gerenciar clientes.'});
         if(!can(actor,'ordens')&&(b.orders.length||b.drafts.length))return send(res,403,{error:'Sem permissão para gerenciar ordens de serviço.'});
         if(!can(actor,'financeiro')&&Array.isArray(b.finance)&&b.finance.length)return send(res,403,{error:'Sem permissão para gerenciar financeiro.'});
