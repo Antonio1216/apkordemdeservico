@@ -1,0 +1,91 @@
+name: ACR OS Pro v1.7.2 - Galeria e Camera
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/build-photo-fixed-apk.yml'
+      - 'scripts/fix-photo-picker.py'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-photo-fixed-apk.yml'
+      - 'scripts/fix-photo-picker.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Obter código
+        uses: actions/checkout@v4
+
+      - name: Preparar versão e aplicar correção das fotos
+        shell: bash
+        run: |
+          set -euo pipefail
+          unzip -q OSPro-Eletrica-Software-Fonte.zip
+          base64 --decode scripts/ospro-v1.6-patch.tgz.b64 > /tmp/ospro-v16.tgz
+          echo "4dfd83a3d7cd5ec538d599d0d7a840bcc2511c3f9da31efd4339fc3c2c41fc4e  /tmp/ospro-v16.tgz" | sha256sum -c -
+          tar -xzf /tmp/ospro-v16.tgz -C ospro-eletrica-software
+          base64 --decode scripts/ospro-v1.7-overlay.tgz.b64 > /tmp/ospro-v17.tgz
+          echo "4d9776c030443ce84ca5fced0794319846e27588b37107a6926e71feca6998d8  /tmp/ospro-v17.tgz" | sha256sum -c -
+          tar -xzf /tmp/ospro-v17.tgz -C ospro-eletrica-software
+          python scripts/fix-photo-picker.py ospro-eletrica-software
+          node --check ospro-eletrica-software/app/src/main/assets/app.js
+          grep -q 'versionName = "1.7.2"' ospro-eletrica-software/app/build.gradle.kts
+          grep -q 'id="photo-camera"' ospro-eletrica-software/app/src/main/assets/index.html
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Preparar Android SDK
+        shell: bash
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -maxdepth 3 -path '*/bin/sdkmanager' -type f | head -1)
+          test -n "$SDKMANAGER"
+          "$SDKMANAGER" --install 'platforms;android-35' 'build-tools;35.0.0'
+
+      - name: Configurar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+
+      - name: Compilar APK
+        working-directory: ospro-eletrica-software
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
+
+      - name: Validar APK gerado
+        run: test -s ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Disponibilizar APK corrigido
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACR-OS-Pro-v1.7.2-Fotos-Corrigidas-APK
+          path: ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Disponibilizar código-fonte corrigido
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root=Path('ospro-eletrica-software')
+          with ZipFile('ACR-OS-Pro-v1.7.2-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
+              for item in root.rglob('*'):
+                  if item.is_file() and not {'.gradle','build','.idea'}.intersection(item.parts):
+                      archive.write(item)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ACR-OS-Pro-v1.7.2-Fonte
+          path: ACR-OS-Pro-v1.7.2-Fonte.zip
+          retention-days: 30
+          if-no-files-found: error
