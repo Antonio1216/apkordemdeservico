@@ -8,7 +8,8 @@ const {spawn}=require('node:child_process');
 const folder=fs.mkdtempSync(path.join(os.tmpdir(),'acr-team-test-'));
 const port=24000+Math.floor(Math.random()*30000),base='http://127.0.0.1:'+port;
 const key='safe-test-key-'+'r'.repeat(42);
-const child=spawn(process.execPath,['server.js'],{cwd:path.join(__dirname,'..'),env:{...process.env,PORT:String(port),PUBLIC_BASE_URL:base,ADMIN_KEY:key,DATA_FILE:path.join(folder,'requests.json'),TEAM_DATA_FILE:path.join(folder,'team.json')},stdio:'ignore'});
+const resetToken='a'.repeat(64);
+const child=spawn(process.execPath,['server.js'],{cwd:path.join(__dirname,'..'),env:{...process.env,PORT:String(port),PUBLIC_BASE_URL:base,ADMIN_KEY:key,DATA_FILE:path.join(folder,'requests.json'),TEAM_DATA_FILE:path.join(folder,'team.json'),PASSWORD_RESET_TOKEN:resetToken},stdio:'ignore'});
 after(()=>{child.kill();fs.rmSync(folder,{recursive:true,force:true});});
 async function ready(){for(let i=0;i<60;i++){try{const res=await fetch(base+'/health');if(res.ok)return;}catch{}await new Promise(r=>setTimeout(r,65));}throw Error('Servidor não inicializou.');}
 async function api(p,method='GET',data,token='',admin=''){const r=await fetch(base+'/api/team/'+p,{method,headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(admin?{'X-API-Key':admin}:{})},body:data?JSON.stringify(data):undefined});return {status:r.status,json:await r.json()};}
@@ -39,4 +40,30 @@ test('cadastro seguro, sessão central, perfis, sincronização com revisão e p
   assert.equal((await api('workspace','GET',null,techToken)).status,401);
   const file=JSON.parse(fs.readFileSync(path.join(folder,'team.json')));
   assert.equal(file.workspace.orders.length,1);assert.ok(!JSON.stringify(file).includes('123456'));assert.ok(!JSON.stringify(file).includes('abcdef'));
+  // Recover the existing administrator without changing shared workspace or other accounts.
+  const recovery=(admin,secret,payload)=>fetch(base+'/api/team/recover-admin-password',{
+    method:'POST',headers:{'Content-Type':'application/json','X-API-Key':admin,'X-Password-Reset-Token':secret},
+    body:JSON.stringify(payload)
+  });
+  const payload={login:'admin@acr.com',senha:'NovaSenha-Segura-123'};
+  assert.equal((await recovery('wrong-key',resetToken,payload)).status,403);
+  assert.equal((await recovery(key,'wrong-token',payload)).status,403);
+  assert.equal((await recovery(key,resetToken,{login:'admin@acr.com',senha:'curta'})).status,400);
+  assert.equal((await recovery(key,resetToken,{login:'tecnico@empresa.com',senha:'NovaSenha-Segura-123'})).status,404);
+  const recovered=await recovery(key,resetToken,payload);
+  assert.equal(recovered.status,200);
+  assert.equal((await recovered.json()).login,'admin@acr.com');
+  assert.equal((await api('login','POST',{login:'admin@acr.com',senha:'abcdef'})).status,401);
+  const newSession=await api('login','POST',payload);
+  assert.equal(newSession.status,200);
+  assert.equal((await api('workspace','GET',null,adminToken)).status,401);
+  assert.equal((await api('workspace','GET',null,newSession.json.token)).json.orders.length,1);
+  assert.equal((await recovery(key,resetToken,payload)).status,409);
+  const persisted=JSON.parse(fs.readFileSync(path.join(folder,'team.json'),'utf8'));
+  assert.equal(persisted.accounts.length,2);
+  assert.equal(persisted.workspace.clients.length,1);
+  assert.equal(persisted.workspace.orders.length,1);
+  assert.equal(persisted.usedPasswordResetTokens.length,1);
+  assert.ok(!JSON.stringify(persisted).includes('NovaSenha-Segura-123'));
+  assert.ok(!JSON.stringify(persisted).includes(resetToken));
 });

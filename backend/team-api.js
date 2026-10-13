@@ -56,6 +56,37 @@ function teamApi(options={}) {
         const salt=crypto.randomBytes(16).toString('hex');const acc={id:crypto.randomUUID(),login,nome,perfil:'Administrador',active:true,rev:1,salt,hash:passwordHash(pwd,salt)};
         data.accounts.push(acc);writeAudit('bootstrap',acc.id);await persist();return send(res,201,{token:makeToken(acc),account:safe(acc)});
       }
+      // Recovery is disabled unless an independent, random reset token is configured on Render.
+      // It requires BOTH the current ADMIN_KEY and that token. Tokens are single-use across restarts.
+      if(req.method==='POST'&&p==='recover-admin-password'){
+        const resetToken=String(process.env.PASSWORD_RESET_TOKEN||'');
+        if(!/^[a-f0-9]{64}$/i.test(resetToken))return send(res,404,{error:'Rota não encontrada.'});
+        const digest=x=>crypto.createHash('sha256').update(String(x||'')).digest();
+        const equals=(a,b)=>crypto.timingSafeEqual(digest(a),digest(b));
+        const suppliedKey=req.headers['x-api-key'],suppliedToken=req.headers['x-password-reset-token'];
+        if(typeof suppliedKey!=='string'||typeof suppliedToken!=='string'||
+          !equals(suppliedKey,KEY)||!equals(suppliedToken,resetToken))
+          return send(res,403,{error:'Credenciais de recuperação inválidas.'});
+        const tokenHash=digest(resetToken).toString('hex');
+        if(data.usedPasswordResetTokens?.includes(tokenHash))
+          return send(res,409,{error:'Este código de recuperação já foi utilizado.'});
+        const b=await body(req),login=normalLogin(b.login),senha=b.senha;
+        if(!validLogin(login)||!validPassword(senha)||senha.length<12)
+          return send(res,400,{error:'Informe login válido e senha de 12 a 128 caracteres.'});
+        const acc=data.accounts.find(a=>a.login===login&&a.perfil==='Administrador'&&a.active!==false);
+        if(!acc)return send(res,404,{error:'Administrador não encontrado.'});
+        // Keep a private, on-disk snapshot before changing any account data.
+        await fs.promises.copyFile(DBFILE,DBFILE+'.pre-password-reset-'+Date.now()+'.bak');
+        const salt=crypto.randomBytes(16).toString('hex');
+        acc.salt=salt;acc.hash=passwordHash(senha,salt);
+        acc.rev=(Number.isInteger(acc.rev)?acc.rev:0)+1; // Invalidate all previous sessions.
+        data.usedPasswordResetTokens||=[];
+        data.usedPasswordResetTokens.push(tokenHash); // Only a hash is stored, never the token.
+        writeAudit('admin-password-recovery',acc.id);
+        tries.delete(login);
+        await persist();
+        return send(res,200,{ok:true,login:acc.login,perfil:acc.perfil});
+      }
       if(req.method==='POST'&&p==='login'){
         const b=await body(req),login=normalLogin(b.login);const count=tries.get(login)||{n:0,until:0};
         if(count.until>Date.now())return send(res,429,{error:'Muitas tentativas. Aguarde 10 minutos.'});

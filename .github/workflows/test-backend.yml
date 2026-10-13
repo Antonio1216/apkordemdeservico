@@ -1,0 +1,29 @@
+name: Validar backend de recuperação ACR OS Pro
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verificar sintaxe
+        run: |
+          node --check backend/team-api.js
+          node --check backend/server.js
+      - name: Verificar script do Termux
+        run: bash -n scripts/recuperar-admin-termux.sh
+      - name: Executar testes do servidor
+        working-directory: backend
+        run: npm test
