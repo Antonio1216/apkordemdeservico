@@ -1,4 +1,4 @@
-name: ACR OS Pro v1.7.7 - Relatorios Corporativos
+name: ACR OS Pro v1.7.8 - Licencas de Software
 
 on:
   pull_request:
@@ -17,6 +17,10 @@ on:
       - 'scripts/ExtendedReportExport-v177.kt'
       - 'backend/report-analytics.js'
       - 'backend/travel.js'
+      - 'scripts/add-licenses-v178.py'
+      - 'scripts/licenses-v178.js'
+      - 'scripts/licenses-panel-v178.html'
+      - 'backend/license-utils.js'
   push:
     branches: [main]
     paths:
@@ -34,6 +38,10 @@ on:
       - 'scripts/ExtendedReportExport-v177.kt'
       - 'backend/report-analytics.js'
       - 'backend/travel.js'
+      - 'scripts/add-licenses-v178.py'
+      - 'scripts/licenses-v178.js'
+      - 'scripts/licenses-panel-v178.html'
+      - 'backend/license-utils.js'
   workflow_dispatch:
 
 permissions:
@@ -63,6 +71,9 @@ jobs:
           python scripts/add-catalog-v175.py ospro-eletrica-software
           python scripts/add-travel-v176.py ospro-eletrica-software
           python scripts/add-reports-v177.py ospro-eletrica-software
+          python scripts/add-licenses-v178.py ospro-eletrica-software
+          node --check ospro-eletrica-software/app/src/main/assets/licenses.js
+          node --check ospro-eletrica-software/app/src/main/assets/license-utils.js
           node --check ospro-eletrica-software/app/src/main/assets/reports.js
           node --check ospro-eletrica-software/app/src/main/assets/report-model.js
           node --check ospro-eletrica-software/app/src/main/assets/travel-core.js
@@ -71,7 +82,7 @@ jobs:
           node --check ospro-eletrica-software/app/src/main/assets/auth.js
           node --check ospro-eletrica-software/app/src/main/assets/permissions.js
           node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'versionName = "1.7.7"' ospro-eletrica-software/app/build.gradle.kts
+          grep -q 'versionName = "1.7.8"' ospro-eletrica-software/app/build.gradle.kts
           python - <<'PY'
           from pathlib import Path
           root=Path('ospro-eletrica-software/app/src/main')
@@ -82,6 +93,14 @@ jobs:
           assert (root/'assets/travel-core.js').exists()
           assert (root/'assets/travel.js').exists()
           assert (root/'assets/reports.js').exists()
+          assert (root/'assets/licenses.js').exists()
+          assert (root/'assets/license-utils.js').exists()
+          assert 'id="license-form"' in h
+          assert 'name="quantidade"' in h and 'name="valorUnitario"' in h
+          assert 'name="vencimento"' in h and 'name="status"' in h
+          assert 'id="license-export-pdf"' in h
+          assert 'data-permission="licencas"' in h
+          assert '"licenses"->"Licencas-Software"' in code
           assert (root/'assets/report-model.js').exists()
           assert 'id="report-equipment"' in h
           assert 'id="report-travel"' in h
@@ -143,7 +162,7 @@ jobs:
       - name: Disponibilizar APK corrigido
         uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.7-Relatorios-APK
+          name: ACR-OS-Pro-v1.7.8-Licencas-APK
           path: ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error
@@ -155,14 +174,14 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile, ZIP_DEFLATED
           root=Path('ospro-eletrica-software')
-          with ZipFile('ACR-OS-Pro-v1.7.7-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
+          with ZipFile('ACR-OS-Pro-v1.7.8-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
               for item in root.rglob('*'):
                   if item.is_file() and not {'.gradle','build','.idea'}.intersection(item.parts):
                       archive.write(item)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.7-Fonte
-          path: ACR-OS-Pro-v1.7.7-Fonte.zip
+          name: ACR-OS-Pro-v1.7.8-Fonte
+          path: ACR-OS-Pro-v1.7.8-Fonte.zip
           retention-days: 30
           if-no-files-found: error
