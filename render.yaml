@@ -1,0 +1,32 @@
+# ACR Suporte em T.I - API de assinatura e equipe (Node.js 22+)
+# ATENCAO: Servico pago com disco persistente. Confirmar valores no Render antes de criar.
+services:
+  - type: web
+    name: acr-os-pro-backend
+    runtime: node
+    plan: starter
+    rootDir: backend
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /health
+    numInstances: 1
+    disk:
+      name: acr-ospro-dados
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_FILE
+        value: /var/data/requests.json
+      - key: TEAM_DATA_FILE
+        value: /var/data/team.json
+      - key: PDF_DIR
+        value: /var/data/pdf-clientes
+      - key: ADMIN_KEY
+        sync: false
+      - key: PUBLIC_BASE_URL
+        fromService:
+          type: web
+          name: acr-os-pro-backend
+          envVarKey: RENDER_EXTERNAL_URL
