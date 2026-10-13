@@ -22,8 +22,8 @@ function persist(){const text=JSON.stringify(records);writeQueue=writeQueue.catc
 const hash=x=>crypto.createHash('sha256').update(x).digest('hex');
 function authorised(req,right=null){
   const actor=team.getActor(req);
-  // Sessões autenticadas respeitam permissões mesmo se o aparelho ainda guarda ADMIN_KEY.
-  if(actor)return !right||team.hasPermission(req,right);
+  // Nunca substitua uma sessão de usuário inválida ou revogada pela ADMIN_KEY residual do aparelho.
+  if(req.headers.authorization)return Boolean(actor)&&(!right||team.hasPermission(req,right));
   const supplied=String(req.headers['x-api-key']||'');
   const a=Buffer.from(hash(supplied),'hex'),b=Buffer.from(hash(KEY),'hex');
   return crypto.timingSafeEqual(a,b);
