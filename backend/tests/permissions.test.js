@@ -31,6 +31,8 @@ test('admin configures fine grained permissions; updates revoke old sessions and
  const update=await api('users/'+uid+'/permissions','PUT',{permissions:{clientes:false,ordens:false,assinaturas:false,links:false,financeiro:true,relatorios:false}},admin);
  assert.equal(update.status,200);assert.equal(update.data.user.permissions.financeiro,true);
  assert.equal((await api('workspace','GET',null,old)).status,401);
+ const deniedRevoked=await fetch(url+'/api/sign-requests',{method:'POST',headers:{'Authorization':'Bearer '+old,'X-API-Key':key,'Content-Type':'application/json'},body:JSON.stringify({orderNumber:'OS-REVOGADA',clientName:'Teste',serviceTitle:'Suporte'})});
+ assert.equal(deniedRevoked.status,401);
  t=await api('login','POST',{login:'teste-tech',senha:'senha-forte'});
  const current=t.data.token;
  assert.equal(t.data.account.permissions.clientes,false);assert.equal(t.data.account.permissions.financeiro,true);
