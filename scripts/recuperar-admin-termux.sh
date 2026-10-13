@@ -13,8 +13,18 @@ done
 printf '%s\n' 'ACR OS Pro - Recuperação de senha do administrador'
 read -r -p "Login [antonio1216]: " LOGIN
 LOGIN="${LOGIN:-antonio1216}"
-read -r -s -p "ADMIN_KEY atual do Render: " ADMIN_KEY; printf '\n'
-read -r -s -p "PASSWORD_RESET_TOKEN do Render: " RESET_TOKEN; printf '\n'
+if [[ -s "$HOME/acr-admin-key.txt" ]]; then
+  ADMIN_KEY=$(< "$HOME/acr-admin-key.txt")
+  printf '%s\n' 'ADMIN_KEY carregada do arquivo privado do Termux.'
+else
+  read -r -s -p "ADMIN_KEY atual do Render: " ADMIN_KEY; printf '\n'
+fi
+if [[ -s "$HOME/acr-reset-token.txt" ]]; then
+  RESET_TOKEN=$(< "$HOME/acr-reset-token.txt")
+  printf '%s\n' 'TOKEN de recuperação carregado do arquivo privado do Termux.'
+else
+  read -r -s -p "PASSWORD_RESET_TOKEN do Render: " RESET_TOKEN; printf '\n'
+fi
 read -r -s -p "Nova senha (12 a 128 caracteres): " NOVA_SENHA; printf '\n'
 read -r -s -p "Repita a nova senha: " CONFIRMACAO; printf '\n'
 if [[ ${#ADMIN_KEY} -lt 24 || ! "$RESET_TOKEN" =~ ^[A-Fa-f0-9]{64}$ ]]; then
