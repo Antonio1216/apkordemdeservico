@@ -1,10 +1,12 @@
-name: ACR OS Pro v1.7.2 - Galeria e Camera
+name: ACR OS Pro v1.7.3 - Arquivos e Camera
 
 on:
   pull_request:
     paths:
       - '.github/workflows/build-photo-fixed-apk.yml'
       - 'scripts/fix-photo-picker.py'
+      - 'scripts/fix-document-picker.py'
+      - 'scripts/fix-document-picker.py'
   push:
     branches: [main]
     paths:
@@ -34,8 +36,24 @@ jobs:
           echo "4d9776c030443ce84ca5fced0794319846e27588b37107a6926e71feca6998d8  /tmp/ospro-v17.tgz" | sha256sum -c -
           tar -xzf /tmp/ospro-v17.tgz -C ospro-eletrica-software
           python scripts/fix-photo-picker.py ospro-eletrica-software
+          python scripts/fix-document-picker.py ospro-eletrica-software
           node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'versionName = "1.7.2"' ospro-eletrica-software/app/build.gradle.kts
+          grep -q 'versionName = "1.7.3"' ospro-eletrica-software/app/build.gradle.kts
+          python - <<'PY'
+          from pathlib import Path
+          root=Path('ospro-eletrica-software/app/src/main')
+          code=(root/'java/br/com/ospro/ordens/MainActivity.kt').read_text()
+          h=(root/'assets/index.html').read_text()
+          assert 'Intent(Intent.ACTION_OPEN_DOCUMENT)' in code
+          assert code.count('Intent(MediaStore.ACTION_IMAGE_CAPTURE)') == 1
+          assert 'val cameraRequested = params.isCaptureEnabled && onlyImages' in code
+          assert 'params.createIntent()' not in code
+          assert 'govPdfPicker.launch(arrayOf("application/pdf"))' in code
+          assert 'id="photo-camera" type="file" accept="image/*" capture="environment"' in h
+          assert 'id="photo-input" type="file" accept="image/*" hidden' in h
+          assert 'id="restore-input" type="file" accept="application/json"' in h
+          print('Validado: documentos e galeria vão para Arquivos; apenas Tirar foto usa câmera.')
+          PY
           grep -q 'id="photo-camera"' ospro-eletrica-software/app/src/main/assets/index.html
 
       - name: Configurar Java
@@ -66,7 +84,7 @@ jobs:
       - name: Disponibilizar APK corrigido
         uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.2-Fotos-Corrigidas-APK
+          name: ACR-OS-Pro-v1.7.3-Documentos-APK
           path: ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
           if-no-files-found: error
@@ -78,14 +96,14 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile, ZIP_DEFLATED
           root=Path('ospro-eletrica-software')
-          with ZipFile('ACR-OS-Pro-v1.7.2-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
+          with ZipFile('ACR-OS-Pro-v1.7.3-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
               for item in root.rglob('*'):
                   if item.is_file() and not {'.gradle','build','.idea'}.intersection(item.parts):
                       archive.write(item)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.2-Fonte
-          path: ACR-OS-Pro-v1.7.2-Fonte.zip
+          name: ACR-OS-Pro-v1.7.3-Fonte
+          path: ACR-OS-Pro-v1.7.3-Fonte.zip
           retention-days: 30
           if-no-files-found: error
