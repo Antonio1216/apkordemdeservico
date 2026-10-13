@@ -130,7 +130,9 @@ function makePdf(order) {
   y-=8;parts.push(`${INK} rg ${M} ${(y-33).toFixed(2)} ${(W-2*M).toFixed(2)} 42 re f\n`);
   absolute('VALOR TOTAL: '+money(order.total),M+16,y-16,13,'F2','1 1 1');
   y-=53;
-  section('Confirmacao da assinatura');
+  // Mantenha título, assinatura e dados de auditoria juntos na página seguinte quando necessário.
+  if(y<335)newPage();
+  section('Confirmação da assinatura');
   const signed=order.status==='signed' && order.signature;
   wrapped('Status',signed?'Assinatura eletronica simples registrada':'Documento para conferencia, ainda nao assinado');
   if(signed){
