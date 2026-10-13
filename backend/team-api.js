@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const {calculateTravel} = require('./travel');
+const LicenseModel = require('./license-utils');
 
 function teamApi(options={}) {
   const KEY=String(options.key||'');
@@ -16,6 +17,10 @@ function teamApi(options={}) {
   data.workspace||={revision:0,clients:[],orders:[],drafts:[],finance:[]};
   for(const type of ['clients','orders','drafts','finance'])data.workspace[type]||=[];
   data.audit||=[];
+  // Licenças possuem revisão independente: atualizações das OS não sobrescrevem este cadastro.
+  data.licenses||={revision:0,items:[]};
+  if(!Array.isArray(data.licenses.items))throw Error('Base de licenças corrompida.');
+  if(!Number.isInteger(data.licenses.revision))data.licenses.revision=0;
   // Coleção separada das OS: a atualização de uma OS não sobrescreve o catálogo.
   data.catalog||={revision:0,services:[],products:[],equipments:[]};
   for(const collection of ['services','products','equipments'])data.catalog[collection]||=[];
@@ -31,10 +36,10 @@ function teamApi(options={}) {
   function validPassword(v){return typeof v==='string'&&v.length>=6&&v.length<=128;}
   // Regras individuais persistidas na conta, nunca no armazenamento do aparelho.
   // A falta de configuração mantém o comportamento padrão dos técnicos atuais.
-  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro','catalogo'];
+  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro','catalogo','licencas'];
   const defaults=a=>a.perfil==='Administrador'
     ? Object.fromEntries(RIGHTS.map(k=>[k,true]))
-    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false,catalogo:false};
+    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false,catalogo:false,licencas:false};
   const permissions=a=>{
     const preset=defaults(a);
     if(a.perfil==='Administrador')return preset;
@@ -159,6 +164,30 @@ function teamApi(options={}) {
       const actor=verifyToken(req);if(!actor)return send(res,401,{error:'Sessão inválida ou expirada. Entre novamente.'});
       if(req.method==='GET'&&p==='me')return send(res,200,{account:safe(actor)});
       if(req.method==='GET'&&p==='users')return send(res,200,{users:data.accounts.filter(x=>x.active!==false).map(safe)});
+      if(p==='licenses'){
+        if(!can(actor,'licencas'))return send(res,403,{error:'Sem permissão para gerenciar licenças de software.'});
+        const safeLicenses=()=>({revision:data.licenses.revision,items:data.licenses.items,companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome||x.razaoSocial||'Empresa'}))});
+        if(req.method==='GET')return send(res,200,safeLicenses());
+        if(req.method==='PUT'){
+          const b=await body(req);
+          if(!b||!Number.isInteger(b.revision)||!Array.isArray(b.items)||b.items.length>2500)
+            return send(res,400,{error:'Lista de licenças inválida (até 2.500 itens).'});
+          if(b.revision!==data.licenses.revision)return send(res,409,{error:'Licenças alteradas em outro aparelho. Atualize antes de salvar.',revision:data.licenses.revision});
+          const ids=new Set();
+          for(const item of b.items){
+            try{
+              if(ids.has(item?.id))throw Error('IDs duplicados de licença.');
+              LicenseModel.validate(item);
+              ids.add(item.id);
+              if(item.empresaId&&!data.workspace.clients.some(x=>x.id===item.empresaId))
+                throw Error('Empresa vinculada não encontrada no cadastro de Clientes.');
+            }catch(error){return send(res,400,{error:error.message});}
+          }
+          data.licenses={revision:data.licenses.revision+1,items:b.items};
+          writeAudit('licenses-update',actor.id);await persist();
+          return send(res,200,safeLicenses());
+        }
+      }
       if(p==='catalog'){
         if(!can(actor,'catalogo'))return send(res,403,{error:'Sem permissão para o catálogo e equipamentos.'});
         if(req.method==='GET')return send(res,200,{...data.catalog,companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome}))});
@@ -211,6 +240,7 @@ function teamApi(options={}) {
         // Não exclua empresa com equipamentos vinculados sem antes transferi-los.
         const kept=new Set((can(actor,'clientes')?b.clients:data.workspace.clients).map(x=>x.id));
         if(data.catalog.equipments.some(x=>!kept.has(x.empresaId)))return send(res,409,{error:'Há equipamento vinculado a empresa removida. Transfira o equipamento antes de excluir a empresa.'});
+        if(data.licenses.items.some(x=>x.empresaId&&!kept.has(x.empresaId)))return send(res,409,{error:'Há licença vinculada à empresa removida. Transfira a licença antes de excluir a empresa.'});
         data.workspace={revision:data.workspace.revision+1,
           clients:can(actor,'clientes')?b.clients:data.workspace.clients,
           orders:can(actor,'ordens')?b.orders:data.workspace.orders,
