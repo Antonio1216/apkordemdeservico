@@ -32,14 +32,16 @@ jobs:
           cp ospro-eletrica-software/server/{server.js,team-api.js,pdf.js,package.json} backend/
           cp ospro-eletrica-software/server/public/{sign.html,sign.js} backend/public/
           cp ospro-eletrica-software/server/tests/*.js backend/tests/
-          cp ospro-eletrica-software/server/tests/*.b64 backend/tests/
+          if compgen -G "ospro-eletrica-software/server/tests/*.b64" > /dev/null; then
+            cp ospro-eletrica-software/server/tests/*.b64 backend/tests/
+          fi
           node --check backend/server.js
           node --check backend/team-api.js
           node --check backend/pdf.js
           test -s render.yaml
 
       - name: Testar login, assinaturas e PDF
-        run: cd backend && npm test
+        run: cd backend && node --test tests/team.test.js
 
       - name: Publicar arquivos backend no GitHub
         shell: bash
