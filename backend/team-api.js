@@ -19,6 +19,9 @@ function teamApi(options={}) {
   if(!Array.isArray(data.accounts))throw Error('Base de usuarios corrompida.');
   data.workspace||={revision:0,clients:[],orders:[],drafts:[],finance:[]};
   for(const type of ['clients','orders','drafts','finance'])data.workspace[type]||=[];
+  // Relacionamentos preservados separadamente para não se perderem na sincronização de OS do APK.
+  data.companyLinks||={};
+  if(typeof data.companyLinks!=='object'||Array.isArray(data.companyLinks))throw Error('Vínculos de empresas inválidos.');
   data.audit||=[];
   // Licenças possuem revisão independente: atualizações das OS não sobrescrevem este cadastro.
   data.licenses||={revision:0,items:[]};
@@ -83,6 +86,17 @@ function teamApi(options={}) {
   const scopeFor=a=>a.perfil==='Técnico'&&typeof a.empresaId==='string' ? (a.empresaId||'__SEM_EMPRESA__') : null;
   const isScoped=a=>scopeFor(a)!==null;
   const companyIds=()=>new Set(data.workspace.clients.map(x=>x.id));
+  const companyById=id=>data.workspace.clients.find(x=>x.id===id);
+  const companyName=x=>String(x?.nome||x?.razaoSocial||'Empresa');
+  const normCompany=x=>String(x||'').trim().replace(/\s+/g,' ');
+  const isContractor=id=>Object.values(data.companyLinks).includes(id);
+  function safeCompany(c){
+    const terceirizadaId=data.companyLinks[c.id]||'';
+    return {id:c.id,nome:companyName(c),
+      tipoEmpresa:terceirizadaId?'cliente-final':isContractor(c.id)?'terceirizada':'independente',
+      terceirizadaId,
+      terceirizadaNome:terceirizadaId?companyName(companyById(terceirizadaId)):''};
+  }
   const belongsCompany=(record,id)=>{
     const direct=[record?.empresaId,record?.clienteId,record?.clientId,record?.companyId].find(x=>typeof x==='string'&&x);
     if(direct)return direct===id;
@@ -307,7 +321,7 @@ function teamApi(options={}) {
       if(req.method==='GET'&&p==='me')return send(res,200,{account:safe(actor)});
       if(req.method==='GET'&&p==='companies'){
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Lista de empresas restrita ao administrador.'});
-        return send(res,200,{companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome||x.razaoSocial||'Empresa'}))});
+        return send(res,200,{companies:data.workspace.clients.map(safeCompany)});
       }
       if(req.method==='POST'&&p==='companies'){
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode cadastrar empresas.'});
@@ -322,6 +336,43 @@ function teamApi(options={}) {
         writeAudit('company-create',actor.id);
         await persist();
         return send(res,201,{company,revision:data.workspace.revision});
+      }
+      if(req.method==='POST'&&p==='companies/link'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador vincula terceirizadas e clientes finais.'});
+        const b=await body(req);
+        const resolve=(id,name,label)=>{
+          if(id!==undefined&&id!==null&&id!==''){
+            if(typeof id!=='string'||id.length>100)throw {status:400,message:'ID inválido para '+label+'.'};
+            const company=companyById(id);
+            if(!company)throw {status:400,message:label+' não encontrada.'};
+            return {company};
+          }
+          const nome=normCompany(name);
+          if(nome.length<3||nome.length>180)throw {status:400,message:'Informe '+label+' (3 a 180 caracteres).'};
+          if(data.workspace.clients.some(x=>companyName(x).toLocaleLowerCase('pt-BR')===nome.toLocaleLowerCase('pt-BR')))
+            throw {status:409,message:label+' já está cadastrada. Selecione o cadastro existente.'};
+          return {company:{id:crypto.randomUUID(),nome,razaoSocial:nome},create:true};
+        };
+        const outsourcing=resolve(b.terceirizadaId,b.terceirizadaNome,'a empresa terceirizada');
+        const final=resolve(b.clienteFinalId,b.clienteFinalNome,'o cliente final');
+        if(outsourcing.company.id===final.company.id||
+           companyName(outsourcing.company).toLocaleLowerCase('pt-BR')===companyName(final.company).toLocaleLowerCase('pt-BR'))
+          return send(res,400,{error:'Terceirizada e cliente final devem ser empresas diferentes.'});
+        if(data.companyLinks[outsourcing.company.id])
+          return send(res,409,{error:'Esta terceirizada já é cliente final de outra empresa. Cadastre outra empresa terceirizada.'});
+        if(isContractor(final.company.id))
+          return send(res,409,{error:'Este cliente final já atua como terceirizada de outros clientes. Selecione outro cliente.'});
+        const creates=Number(Boolean(outsourcing.create))+Number(Boolean(final.create));
+        if(data.workspace.clients.length+creates>1500)
+          return send(res,409,{error:'Limite de empresas cadastradas atingido.'});
+        if(outsourcing.create)data.workspace.clients.push(outsourcing.company);
+        if(final.create)data.workspace.clients.push(final.company);
+        data.companyLinks[final.company.id]=outsourcing.company.id;
+        data.workspace.revision++;
+        writeAudit('company-outsourcing-link',actor.id);
+        await persist();
+        return send(res,200,{terceirizada:safeCompany(outsourcing.company),
+          clienteFinal:safeCompany(final.company),revision:data.workspace.revision});
       }
       if(req.method==='GET'&&p==='users'){
         const scope=scopeFor(actor);
@@ -485,6 +536,8 @@ function teamApi(options={}) {
         }
         // Não exclua empresa com equipamentos vinculados sem antes transferi-los.
         const kept=new Set((can(actor,'clientes')?b.clients:data.workspace.clients).map(x=>x.id));
+        if(Object.entries(data.companyLinks).some(([cliente,terceirizada])=>!kept.has(cliente)||!kept.has(terceirizada)))
+          return send(res,409,{error:'Existem vínculos entre terceirizadas e clientes finais. Não remova as empresas vinculadas pelo cadastro antigo.'});
         if(data.catalog.equipments.some(x=>!kept.has(x.empresaId)))return send(res,409,{error:'Há equipamento vinculado a empresa removida. Transfira o equipamento antes de excluir a empresa.'});
         if(data.licenses.items.some(x=>x.empresaId&&!kept.has(x.empresaId)))return send(res,409,{error:'Há licença vinculada à empresa removida. Transfira a licença antes de excluir a empresa.'});
         data.workspace={revision:data.workspace.revision+1,
