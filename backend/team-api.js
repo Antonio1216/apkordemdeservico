@@ -152,6 +152,63 @@ function teamApi(options={}) {
         const salt=crypto.randomBytes(16).toString('hex');const acc={id:crypto.randomUUID(),login,nome,perfil:'Administrador',active:true,rev:1,salt,hash:passwordHash(pwd,salt)};
         data.accounts.push(acc);writeAudit('bootstrap',acc.id);await persist();return send(res,201,{token:makeToken(acc),account:safe(acc)});
       }
+      // Public email recovery for non-admins only. Generic replies prevent account enumeration.
+      if(req.method==='POST'&&p==='password-reset/request'){
+        const b=await body(req),email=normalLogin(b.email);
+        const key=String(req.socket.remoteAddress||'')+'|'+email.slice(0,254);
+        if(!allowedAttempt(emailRequests,key,3,15*60_000))
+          return send(res,200,{message:genericEmailMessage});
+        const a=validEmail(email)?data.accounts.find(x=>x.active!==false&&x.perfil!=='Administrador'&&(x.email===email||(!x.email&&x.login===email))):null;
+        if(a&&process.env.RESEND_API_KEY&&process.env.PASSWORD_RESET_FROM_EMAIL){
+          const token=crypto.randomBytes(32).toString('base64url');
+          const previous=a.emailReset;
+          a.emailReset={hash:digestToken(token),expires:Date.now()+15*60_000};
+          try{
+            const link=configuredPublicBase()+'/password-reset#token='+encodeURIComponent(token);
+            await Recovery.sendResetMail({to:email,link});
+            writeAudit('user-password-reset-email-request',a.id);
+            await persist();
+          }catch{
+            if(previous)a.emailReset=previous;else delete a.emailReset;
+            // Never print a token, address or mail provider response to logs.
+          }
+        }
+        return send(res,200,{message:genericEmailMessage});
+      }
+      if(req.method==='POST'&&p==='password-reset/confirm'){
+        const b=await body(req),token=b.token,senha=b.senha;
+        if(!allowedAttempt(emailRequests,'confirm|'+String(req.socket.remoteAddress||''),15,15*60_000))
+          return send(res,429,{error:'Muitas tentativas. Aguarde 15 minutos.'});
+        if(typeof token!=='string'||!/^[A-Za-z0-9_-]{42,44}$/.test(token)||!validPassword(senha)||senha.length<12)
+          return send(res,400,{error:'Link inválido ou senha fora do padrão (mínimo de 12 caracteres).'});
+        const hashed=digestToken(token);
+        const acc=data.accounts.find(a=>a.perfil!=='Administrador'&&a.active!==false&&a.emailReset?.hash===hashed&&a.emailReset.expires>Date.now());
+        if(!acc)return send(res,400,{error:'Link inválido ou expirado. Solicite outro.'});
+        passwordChange(acc,senha);
+        writeAudit('user-password-reset-email-complete',acc.id);
+        await persist();
+        return send(res,200,{ok:true});
+      }
+      // A verified Microsoft Authenticator TOTP may recover ONLY an enrolled administrator.
+      if(req.method==='POST'&&p==='admin-totp/recover'){
+        const b=await body(req),login=normalLogin(b.login),senha=b.senha,code=b.code;
+        const key='totp|'+String(req.socket.remoteAddress||'')+'|'+login.slice(0,254);
+        if(!allowedAttempt(adminTotpAttempts,key,5,10*60_000))
+          return send(res,429,{error:'Muitas tentativas. Aguarde 10 minutos.'});
+        if(!validLogin(login)||!validPassword(senha)||senha.length<12||typeof code!=='string'||!/^\d{6}$/.test(code))
+          return send(res,400,{error:'Informe login, código de seis dígitos e nova senha de 12 a 128 caracteres.'});
+        const acc=data.accounts.find(a=>a.login===login&&a.perfil==='Administrador'&&a.active!==false&&a.totp?.secret);
+        if(!acc)return send(res,403,{error:'Recuperação por autenticador indisponível ou inválida.'});
+        let step=-1;
+        try{step=Recovery.verifyTotp(Recovery.decrypt(acc.totp.secret,KEY),code,Date.now(),acc.totp.lastStep??-1);}catch{}
+        if(step<0)return send(res,403,{error:'Código inválido ou já utilizado.'});
+        // Prevent TOTP replay even if concurrent requests arrive.
+        acc.totp.lastStep=step;
+        passwordChange(acc,senha);
+        writeAudit('admin-password-reset-totp',acc.id);
+        await persist();
+        return send(res,200,{ok:true});
+      }
       // Recovery is disabled unless an independent, random reset token is configured on Render.
       // It requires BOTH the current ADMIN_KEY and that token. Tokens are single-use across restarts.
       if(req.method==='POST'&&p==='recover-admin-password'){
