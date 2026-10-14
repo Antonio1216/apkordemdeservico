@@ -1,6 +1,7 @@
 'use strict';
 (() => {
-  let bearer='',account=null,companies=[],technicians=[],latestTickets=[];
+  let bearer='',account=null,companies=[],technicians=[],latestTickets=[],editingCompanyId=null;
+  const lookupMemory={outsourcing:null,final:null},lookupTimers={};
   const el=id=>document.getElementById(id);
   const msg=message=>{el('message').textContent=message;};
   const escapeText=x=>String(x??'');
@@ -25,6 +26,7 @@
   function logout(message='Você saiu do painel.'){
     bearer='';account=null;companies=[];technicians=[];latestTickets=[];
     el('login-form').reset();el('link-result').hidden=true;el('portal-link').value='';
+    editingCompanyId=null;
     loginView(true);msg(message);
   }
   async function action(form,fn,localStatus){
@@ -84,6 +86,108 @@
       list.append(card);
     }
   }
+  const cleanCnpj=value=>String(value||'').toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const companyFields=['nome','cnpj','razaoSocial','nomeFantasia','logradouro','numero',
+    'complemento','bairro','cidade','uf','cep','telefone','email'];
+  function setFormValues(company){
+    const form=el('new-company-form');
+    for(const key of companyFields){
+      const field=form.elements.namedItem(key);
+      if(field)field.value=company?.[key]||'';
+    }
+  }
+  function resetCompanyEdit(){
+    editingCompanyId=null;
+    el('new-company-form').reset();
+    el('company-form-title').textContent='Cadastrar nova empresa';
+    el('save-company').textContent='Cadastrar empresa';
+    el('cancel-company-edit').hidden=true;
+    el('lookup-company-status').textContent='';
+  }
+  function editCompany(company){
+    editingCompanyId=company.id;
+    setFormValues(company);
+    el('company-form-title').textContent='Editando: '+company.nome;
+    el('save-company').textContent='Salvar alterações da empresa';
+    el('cancel-company-edit').hidden=false;
+    el('company-feedback').textContent='';
+    el('new-company-form').scrollIntoView({behavior:'smooth',block:'start'});
+    el('company-name').focus();
+  }
+  function renderCompanies(){
+    const list=el('company-list'),filter=String(el('company-filter').value||'').trim().toLocaleLowerCase('pt-BR');
+    list.replaceChildren();
+    const filtered=companies.filter(c=>!filter||[
+      c.nome,c.razaoSocial,c.nomeFantasia,c.cnpj,c.cidade,c.terceirizadaNome
+    ].some(value=>String(value||'').toLocaleLowerCase('pt-BR').includes(filter)));
+    if(!filtered.length){const p=document.createElement('p');p.textContent='Nenhuma empresa encontrada.';list.append(p);return;}
+    for(const c of [...filtered].sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'))){
+      const card=document.createElement('article');card.className='company-item';
+      const h=document.createElement('h4');h.textContent=c.nome;card.append(h);
+      const role=document.createElement('p');
+      role.className='company-status';
+      role.textContent='Tipo: '+(c.tipoEmpresa==='cliente-final'?'Cliente final':isContractor(c)?'Terceirizada':'Empresa independente');
+      card.append(role);
+      for(const text of ['CNPJ: '+(c.cnpj||'Não informado'),
+        'Razão social: '+(c.razaoSocial||'Não informada'),
+        'Localização: '+([c.cidade,c.uf].filter(Boolean).join(' / ')||'Não informada'),
+        ...(c.terceirizadaId?['Terceirizada responsável: '+(c.terceirizadaNome||companyName(c.terceirizadaId))]:[])]){
+        const p=document.createElement('p');p.textContent=text;card.append(p);
+      }
+      const btn=document.createElement('button');btn.type='button';btn.className='secondary';
+      btn.textContent='Editar empresa';btn.setAttribute('aria-label','Editar empresa '+c.nome);
+      btn.addEventListener('click',()=>editCompany(c));
+      card.append(btn);list.append(card);
+    }
+  }
+  async function lookupCompany(kind){
+    const ids={
+      company:['company-cnpj','lookup-company-status'],
+      outsourcing:['outsourcing-cnpj','lookup-outsourcing-status'],
+      final:['final-cnpj','lookup-final-status']
+    };
+    const [inputId,statusId]=ids[kind],input=el(inputId),status=el(statusId);
+    const cnpj=cleanCnpj(input.value);
+    if(cnpj.length!==14){status.textContent='Informe um CNPJ completo com 14 caracteres.';return;}
+    status.textContent='Consultando CNPJ...';
+    try{
+      const result=await request('companies/cnpj/'+encodeURIComponent(cnpj));
+      if(cleanCnpj(input.value)!==cnpj)return; // evita preencher se o usuário alterou o número
+      const dados=result.empresa;
+      if(kind==='company'){
+        setFormValues({...Object.fromEntries(companyFields.map(key=>[key,el('new-company-form').elements.namedItem(key)?.value||''])),...dados,
+          nome:dados.nomeFantasia||dados.razaoSocial,
+          cnpj:cnpj});
+      }else{
+        const existing=companies.find(c=>cleanCnpj(c.cnpj)===cnpj);
+        if(existing){
+          const select=el(kind==='outsourcing'?'outsourcing-company':'final-company');
+          if([...select.options].some(o=>o.value===existing.id)){
+            select.value=existing.id;toggleCompanyInputs();
+            status.textContent='Empresa já cadastrada: '+existing.nome+'. Cadastro existente selecionado.';
+            lookupMemory[kind]=null;return;
+          }
+          status.textContent='CNPJ cadastrado em '+existing.nome+'. Selecione outra empresa compatível.';
+          return;
+        }
+        lookupMemory[kind]=dados;
+        el(kind==='outsourcing'?'outsourcing-new':'final-new').value=dados.nomeFantasia||dados.razaoSocial;
+      }
+      const exists=companies.find(c=>cleanCnpj(c.cnpj)===cnpj&&c.id!==editingCompanyId);
+      status.textContent=exists?
+        'CNPJ já cadastrado para '+exists.nome+'. Use Editar empresa na lista abaixo.':
+        'Dados encontrados na BrasilAPI. Confira as informações antes de salvar.';
+    }catch(error){
+      if(cleanCnpj(input.value)===cnpj)status.textContent=error.message+'. Você pode preencher manualmente.';
+    }
+  }
+  function scheduleCnpjLookup(kind){
+    clearTimeout(lookupTimers[kind]);
+    const input=el(kind==='company'?'company-cnpj':kind==='outsourcing'?'outsourcing-cnpj':'final-cnpj');
+    if(kind!=='company')lookupMemory[kind]=null;
+    if(cleanCnpj(input.value).length===14)
+      lookupTimers[kind]=setTimeout(()=>lookupCompany(kind),650);
+  }
   function refreshCompanyLinks(){
     const outsource=el('outsourcing-company'),final=el('final-company');
     const previousOutsource=outsource.value,previousFinal=final.value;
@@ -130,6 +234,7 @@
     syncAssignment();
     renderDelegations();
     refreshCompanyLinks();
+    renderCompanies();
   }
   function syncAssignment(){
     const technician=technicians.find(t=>t.id===el('delegate-tech').value);
