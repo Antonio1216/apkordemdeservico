@@ -11,14 +11,20 @@ Atualização automática a cada 5 minutos enquanto app visível; o Render reuti
 
 ## Configuração no Render (administrador)
 
-1. Confirme com o suporte RHiD que seu plano e token podem usar GET /device.
-2. Obtenha o token Bearer da API RHiD v2, preferencialmente de integração somente leitura.
-3. Abra o serviço acr-os-pro-backend no Render > Environment.
-4. Defina RHID_API_TOKEN: coloque somente o token, sem o prefixo Bearer.
-5. RHID_DEVICE_URL (opcional): endereço HTTPS da API documentado para sua conta. O padrão técnico é https://www.rhid.com.br/v2/api.svc/device; confirme com o RHiD qual é o endpoint exato de sua instância. O conector aceita somente rhid.com.br via HTTPS e caminho exato /v2/api.svc/device.
-6. Salve, redeploy, e abra o aplicativo atualizado com usuário Administrador. Para técnicos, habilite a permissão Monitoramento RHiD no cadastro de usuários.
+1. Confirme com a Control iD que a conta RHiD escolhida possui permissão para consultar GET /device. Preferencialmente use uma conta de integração com acesso mínimo, em vez da sua conta administrativa principal.
+2. Em Render → acr-os-pro-backend → Environment, configure variáveis privadas:
+   - RHID_LOGIN_EMAIL: e-mail da conta RHiD autorizada.
+   - RHID_LOGIN_PASSWORD: senha da conta RHiD. Preencha diretamente no Render; **não** envie no ChatGPT, Swagger ou GitHub.
+   - RHID_LOGIN_DOMAIN: somente se seu ambiente RHiD usa domínio específico (opcional).
+3. RHID_DEVICE_URL (opcional): padrão https://www.rhid.com.br/v2/api.svc/device conforme Swagger oficial. Só o domínio HTTPS oficial e o caminho /v2/api.svc/device são permitidos.
+4. Para login automático não é preciso RHID_API_TOKEN. Se você criou essa variável em branco, apague-a. Se já existir token válido, a dupla RHID_LOGIN_EMAIL + RHID_LOGIN_PASSWORD tem prioridade.
+5. Salve e faça redeploy. No app atualizado, faça login como Administrador; para técnicos habilite a permissão Monitoramento RHiD.
 
-Nunca cole senhas ou tokens no app, no chat ou no código do GitHub. Se expirar, atualize o token no Render.
+**Como funciona:** no primeiro acesso, o Render faz POST /v2/api.svc/login com email/password (system = rhid); recebe accessToken e guarda apenas em memória. O app consulta GET /v2/api.svc/device sem jamais receber o token. O servidor reutiliza o token enquanto válido, e renova automaticamente em resposta ao HTTP 401 de expiração. O token não fica salvo no banco, no ZIP nem no GitHub.
+
+Se sua conta exigir troca de senha, MFA ou outro fluxo incompatível com POST /login, essa integração precisa de credenciais específicas autorizadas pela Control iD. O painel exibirá erro de conexão, não equipamentos fictícios. Guarde e rotacione a senha no Render conforme as práticas da sua organização.
+
+Nunca cole credenciais, prints com secrets ou tokens no app, chat ou código do GitHub.
 A API é consultada sem armazenar biometria, CPF, registros de ponto ou chave de licença.
 
 ## Segurança e limites
