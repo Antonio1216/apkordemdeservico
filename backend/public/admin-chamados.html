@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Administração de chamados | ACR OS Pro</title>
+<style>
+:root{font:16px/1.5 system-ui,-apple-system,sans-serif;color:#17314b;color-scheme:light}
+*{box-sizing:border-box}
+body{background:#edf3f9;margin:0}
+header{background:#0d4170;color:white;padding:20px max(16px,calc((100vw - 920px)/2));}
+header h1{font-size:clamp(1.4rem,4vw,1.8rem);line-height:1.25;margin:0}
+header p{margin:8px 0 0}
+main{max-width:920px;padding:14px;margin:0 auto}
+section{background:#fff;border:1px solid #d0dfeb;border-radius:14px;padding:clamp(16px,3vw,24px);margin:14px 0;box-shadow:0 3px 10px #082b4514}
+h2{font-size:1.24rem;margin:0 0 8px}h3{font-size:1.06rem;margin:0 0 6px}p{margin:8px 0}
+label{display:grid;gap:5px;font-weight:650;margin:11px 0}
+input,select,textarea{width:100%;min-height:46px;border:1px solid #7b91a6;border-radius:8px;padding:10px 12px;font:inherit;background:white;color:#17314b}
+input[readonly]{background:#f0f4f9}
+button{font:inherit;font-weight:700;border:0;border-radius:9px;padding:11px 17px;min-height:46px;background:#09639b;color:#fff;cursor:pointer}
+button:disabled{opacity:.65;cursor:progress}
+button.secondary{background:#e7f0f8;color:#133d62;border:1px solid #bad1e3}
+button.danger{background:#a3382d}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #e4ab20;outline-offset:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:0 16px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.status{font-weight:650;color:#164e76;min-height:1.5em}
+.hint{font-size:.91rem;color:#49637c}
+.alert{background:#fff2d6;border:1px solid #e9c681;padding:12px;border-radius:9px}
+.chamado{padding:16px;border:1px solid #cfdfed;border-left:4px solid #1473ac;border-radius:9px;margin:12px 0}
+.badge{font-size:.88rem;font-weight:700;color:#144876}
+[hidden]{display:none!important}
+@media(max-width:500px){header{padding:18px 16px}main{padding:10px}.actions button{flex:1 1 auto}}
+</style>
+</head>
+<body>
+<header>
+<h1>ACR OS Pro — Administração de Chamados</h1>
+<p>Gestão de empresas, técnicos e links de atendimento.</p>
+</header>
+<main>
+<section id="login-section" aria-labelledby="login-title">
+<h2 id="login-title">Entrar como administrador</h2>
+<p>Use as mesmas credenciais de administrador do ACR OS Pro.</p>
+<form id="login-form">
+<label for="login">Login ou e-mail</label>
+<input id="login" name="login" autocomplete="username" maxlength="254" required>
+<label for="password">Senha</label>
+<input id="password" name="senha" type="password" autocomplete="current-password" required>
+<div class="actions"><button type="submit">Entrar no painel</button></div>
+</form>
+<p class="hint">A autenticação é feita pelo servidor via HTTPS. A senha não fica armazenada nesta página.</p>
+</section>
+<div id="admin-area" hidden>
+<section>
+<div class="actions"><strong id="welcome">Administrador</strong>
+<button id="refresh" type="button" class="secondary">Atualizar dados</button>
+<button id="logout" type="button" class="danger">Sair</button></div>
+<p id="ticket-notice" class="alert" role="status" hidden></p>
+<p class="hint">Ao vincular um técnico a uma empresa, sua sessão anterior é encerrada. Ele deverá entrar novamente no aplicativo.</p>
+</section>
+<section aria-labelledby="company-title">
+<h2 id="company-title">1. Empresas cadastradas</h2>
+<p id="companies-count" class="hint">Carregando...</p>
+<form id="new-company-form">
+<div class="grid">
+<label for="company-name">Cadastrar empresa, se ainda não existir
+<input id="company-name" name="nome" maxlength="180" autocomplete="organization" placeholder="Nome da empresa" required></label>
+</div>
+<button type="submit">Cadastrar empresa</button>
+</form>
+</section>
+<section aria-labelledby="tech-title">
+<h2 id="tech-title">2. Técnicos da equipe</h2>
+<p id="technicians-count" class="hint">Carregando...</p>
+<details>
+<summary><strong>Cadastrar novo técnico</strong></summary>
+<form id="new-tech-form">
+<div class="grid">
+<label>Nome completo<input name="nome" required minlength="3" maxlength="140" autocomplete="off"></label>
+<label>Login do técnico<input name="login" required maxlength="254" autocapitalize="none" autocomplete="off"></label>
+<label>E-mail para recuperação<input name="email" type="email" maxlength="254" autocomplete="off"></label>
+<label>Senha temporária<input name="senha" type="password" minlength="12" maxlength="128" autocomplete="new-password" required></label>
+</div>
+<button type="submit">Cadastrar técnico</button>
+</form>
+</details>
+</section>
+<section aria-labelledby="delegate-title">
+<h2 id="delegate-title">3. Delegar técnico a uma empresa</h2>
+<form id="delegate-form">
+<div class="grid">
+<label for="delegate-tech">Técnico
+<select id="delegate-tech" name="tecnicoId" required><option value="">Carregando...</option></select></label>
+<label for="delegate-company">Empresa autorizada
+<select id="delegate-company" name="empresaId" required><option value="">Carregando...</option></select></label>
+</div>
+<button type="submit">Salvar delegação</button>
+</form>
+<p class="hint">A opção Sem empresa bloqueia o vínculo do técnico. Um técnico só poderá ser selecionado pelos clientes da empresa atribuída.</p>
+</section>
+<section aria-labelledby="portal-title">
+<h2 id="portal-title">4. Gerar acesso privado do cliente</h2>
+<form id="portal-form">
+<label for="portal-company">Empresa que receberá o link
+<select id="portal-company" name="empresaId" required><option value="">Carregando...</option></select></label>
+<button type="submit">Gerar link do portal</button>
+</form>
+<div id="link-result" hidden>
+<label for="portal-link">Link exclusivo gerado
+<input id="portal-link" readonly autocomplete="off" spellcheck="false"></label>
+<div class="actions">
+<button type="button" id="copy-link">Copiar link</button>
+<button type="button" class="secondary" id="share-link">Compartilhar</button>
+</div>
+<p class="alert">Guarde esse link: ele permite ao cliente abrir e consultar os chamados da empresa. Gerar outro link revoga o anterior. Não o publique em grupos públicos.</p>
+</div>
+</section>
+<section aria-labelledby="calls-title">
+<h2 id="calls-title">5. Acompanhar chamados</h2>
+<div class="actions">
+<button type="button" class="secondary" id="refresh-tickets">Atualizar chamados</button>
+<button type="button" id="seen-tickets">Marcar novos como visualizados</button>
+</div>
+<div id="ticket-list" aria-live="polite"></div>
+</section>
+</div>
+<p id="message" role="status" aria-live="polite" class="status"></p>
+<p class="hint">Os avisos desta página são atualizados enquanto ela está aberta; não substituem notificações push do celular.</p>
+</main>
+<script src="/admin-chamados.js" defer></script>
+</body>
+</html>
