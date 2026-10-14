@@ -24,11 +24,17 @@ test('Administração via navegador: isolamento por perfil, cadastro atômico, d
  await ready();
  const page=await fetch(base+'/admin-chamados');
  assert.equal(page.status,200);
- assert.ok((await page.text()).includes('Entrar como administrador'));
+ const html=await page.text();
+ assert.ok(html.includes('Entrar como administrador'));
+ assert.ok(html.includes('id="delegation-list"'));
+ assert.ok(html.includes('Técnicos e acessos registrados'));
  const script=await fetch(base+'/admin-chamados.js');
  assert.equal(script.status,200);
  const code=await script.text();
  assert.ok(code.includes("request('customer-portals','POST'"));
+ assert.ok(code.includes('function renderDelegations()'));
+ assert.ok(code.includes('renderDelegations();'));
+ assert.ok(code.includes("String(saved.empresaId||'')!==empresaId"));
  assert.ok(!code.includes('localStorage'));
  assert.equal((await api('companies')).status,401);
  const registered=await api('bootstrap','POST',{nome:'Admin de Teste',login:'admin',senha:'SenhaAdmin123'},'',key);
