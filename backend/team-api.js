@@ -7,6 +7,7 @@ const {calculateTravel} = require('./travel');
 const LicenseModel = require('./license-utils');
 const RHiDMonitor = require('./rhid-monitor');
 const Recovery = require('./recovery');
+const {serviceDesk}=require('./service-desk');
 
 function teamApi(options={}) {
   const KEY=String(options.key||'');
@@ -79,7 +80,19 @@ function teamApi(options={}) {
     return Object.fromEntries(RIGHTS.map(k=>[k,typeof a.permissions?.[k]==='boolean'?a.permissions[k]:preset[k]]));
   };
   const can=(a,right)=>Boolean(a)&&(a.perfil==='Administrador'||permissions(a)[right]===true);
-  const safe=a=>({id:a.id,nome:a.nome,login:a.login,email:a.email||'',perfil:a.perfil,active:a.active!==false,permissions:permissions(a)});
+  const scopeFor=a=>a.perfil==='Técnico'&&typeof a.empresaId==='string' ? (a.empresaId||'__SEM_EMPRESA__') : null;
+  const isScoped=a=>scopeFor(a)!==null;
+  const companyIds=()=>new Set(data.workspace.clients.map(x=>x.id));
+  const belongsCompany=(record,id)=>{
+    const direct=[record?.empresaId,record?.clienteId,record?.clientId,record?.companyId].find(x=>typeof x==='string'&&x);
+    if(direct)return direct===id;
+    const label=[record?.cliente,record?.clienteNome,record?.clientName,record?.empresa].find(x=>typeof x==='string'&&x.trim());
+    if(!label)return false;
+    const matching=data.workspace.clients.filter(x=>[x.nome,x.razaoSocial].some(n=>typeof n==='string'&&n.trim().toLowerCase()===label.trim().toLowerCase()));
+    return matching.length===1&&matching[0].id===id;
+  };
+  const safe=a=>({id:a.id,nome:a.nome,login:a.login,email:a.email||'',perfil:a.perfil,active:a.active!==false,
+    empresaId:scopeFor(a)||'',permissions:permissions(a)});
   function passwordHash(p,salt){return crypto.scryptSync(p,Buffer.from(salt,'hex'),64,{N:16384,r:8,p:1}).toString('hex');}
   function safeEq(a,b){const x=Buffer.from(a||'','hex'),y=Buffer.from(b||'','hex');return x.length===y.length && x.length>0 && crypto.timingSafeEqual(x,y);}
   function makeToken(acc){const payload=Buffer.from(JSON.stringify({uid:acc.id,rev:acc.rev,exp:Date.now()+8*3600*1000})).toString('base64url');return payload+'.'+crypto.createHmac('sha256',tokenKey).update(payload).digest('base64url');}
@@ -93,12 +106,14 @@ function teamApi(options={}) {
   }
   function send(res,code,obj){res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(obj));}
   async function body(req){const chunks=[];let size=0;for await(const part of req){size+=part.length;if(size>2_000_000)throw {status:413,message:'Dados excedem 2 MB.'};chunks.push(part);}try{return JSON.parse(Buffer.concat(chunks).toString());}catch{throw {status:400,message:'JSON inválido.'};}}
-  const stateFor=u=>({revision:data.workspace.revision,
-    clients:can(u,'clientes')?data.workspace.clients:[],
-    orders:can(u,'ordens')?data.workspace.orders:[],
-    drafts:can(u,'ordens')?data.workspace.drafts:[],
-    ...(can(u,'financeiro')?{finance:data.workspace.finance}:{})
-  });
+  const stateFor=u=>{
+    const scope=scopeFor(u),filter=a=>scope===null?a:a.filter(x=>belongsCompany(x,scope));
+    return {revision:data.workspace.revision,
+      clients:can(u,'clientes')?filter(data.workspace.clients.filter(x=>scope===null||x.id===scope)):[],
+      orders:can(u,'ordens')?filter(data.workspace.orders):[],
+      drafts:can(u,'ordens')?filter(data.workspace.drafts):[],
+      ...(can(u,'financeiro')?{finance:filter(data.workspace.finance)}:{})};
+  };
   function validCollection(arr,max){return Array.isArray(arr)&&arr.length<=max&&arr.every(x=>x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.id==='string'&&x.id.length>=1&&x.id.length<=100);}
   const catalogText=(x,max=200)=>typeof x==='string'&&x.length<=max;
   const serialOK=s=>typeof s==='string'&&s.length<=120;
@@ -137,6 +152,7 @@ function teamApi(options={}) {
     }
     return null;
   }
+  const desk=serviceDesk({data,dbfile:DBFILE,persist,send,body,writeAudit,scopeFor});
   const tries=new Map();
   async function handle(req,res,pathname){
     if(!pathname.startsWith('/api/team/'))return false;
@@ -152,6 +168,7 @@ function teamApi(options={}) {
         const salt=crypto.randomBytes(16).toString('hex');const acc={id:crypto.randomUUID(),login,nome,perfil:'Administrador',active:true,rev:1,salt,hash:passwordHash(pwd,salt)};
         data.accounts.push(acc);writeAudit('bootstrap',acc.id);await persist();return send(res,201,{token:makeToken(acc),account:safe(acc)});
       }
+      if(p.startsWith('customer/'))return desk.publicHandle(req,res,p);
       // Public email recovery for non-admins only. Generic replies prevent account enumeration.
       if(req.method==='POST'&&p==='password-reset/request'){
         const b=await body(req),email=normalLogin(b.email);
@@ -288,7 +305,12 @@ function teamApi(options={}) {
         return send(res,200,{enabled:true});
       }
       if(req.method==='GET'&&p==='me')return send(res,200,{account:safe(actor)});
-      if(req.method==='GET'&&p==='users')return send(res,200,{users:data.accounts.filter(x=>x.active!==false).map(safe)});
+      if(req.method==='GET'&&p==='users'){
+        const scope=scopeFor(actor);
+        return send(res,200,{users:data.accounts.filter(x=>x.active!==false&&(scope===null||x.id===actor.id||
+          x.perfil==='Técnico'&&x.empresaId===scope)).map(safe)});
+      }
+      if(p==='tickets'||p.startsWith('tickets/')||p==='customer-portals')return desk.authenticatedHandle(req,res,p,actor);
       if(p==='rhid-monitor' && req.method==='GET'){
         if(!can(actor,'rhid'))return send(res,403,{error:'Sem permissão para monitorar equipamentos RHiD.'});
         if(!process.env.RHID_API_TOKEN?.trim()&&!(process.env.RHID_LOGIN_EMAIL?.trim()&&process.env.RHID_LOGIN_PASSWORD)){
