@@ -12,8 +12,8 @@ function endpoint(value=DEFAULT_URL){
 const clean=(v,max=160)=>typeof v==='string'?v.trim().slice(0,max):'';
 function normalizedStatus(v){
   const s=clean(v,60).toLowerCase();
-  if(['online','on-line','conectado','connected','ativo'].includes(s))return 'online';
-  if(['offline','off-line','desconectado','disconnected','inativo'].includes(s))return 'offline';
+  if(['online','on-line','conectado','connected'].includes(s))return 'online';
+  if(['offline','off-line','desconectado','disconnected'].includes(s))return 'offline';
   return 'desconhecido'; // Never infer connectivity from an old timestamp alone.
 }
 function iso(v){
