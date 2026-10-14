@@ -153,6 +153,17 @@ function serviceDesk({data,dbfile,persist,send,body,writeAudit,scopeFor}){
    writeAudit('ticket-status',actor.id);
    await persist();return send(res,200,{ticket:safeTicket(ticket)});
   }
+  const getEncoded=p.match(/^tickets\/([0-9a-f-]{36})\/evidence-data\/([0-9a-f-]{36})$/i);
+  if(req.method==='GET'&&getEncoded){
+   const ticket=data.tickets.find(x=>x.id===getEncoded[1]);
+   if(!ticket||!belongs(actor,ticket))return send(res,403,{error:'Evidência indisponível.'});
+   const e=ticket.evidencias.find(x=>x.id===getEncoded[2]);
+   if(!e)return send(res,404,{error:'Arquivo não encontrado.'});
+   try{
+    const bytes=await fs.promises.readFile(path.join(uploadDir,e.id+allowedMime[e.tipo]));
+    return send(res,200,{nome:e.nome,tipo:e.tipo,data:bytes.toString('base64')});
+   }catch{return send(res,404,{error:'Arquivo indisponível.'});}
+  }
   const getFile=p.match(/^tickets\/([0-9a-f-]{36})\/evidence\/([0-9a-f-]{36})$/i);
   if(req.method==='GET'&&getFile){
    const ticket=data.tickets.find(x=>x.id===getFile[1]);
