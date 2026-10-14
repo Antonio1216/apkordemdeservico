@@ -172,9 +172,9 @@ function teamApi(options={}) {
       if(req.method==='GET'&&p==='users')return send(res,200,{users:data.accounts.filter(x=>x.active!==false).map(safe)});
       if(p==='rhid-monitor' && req.method==='GET'){
         if(!can(actor,'rhid'))return send(res,403,{error:'Sem permissão para monitorar equipamentos RHiD.'});
-        if(!process.env.RHID_API_TOKEN?.trim()){
+        if(!process.env.RHID_API_TOKEN?.trim()&&!(process.env.RHID_LOGIN_EMAIL?.trim()&&process.env.RHID_LOGIN_PASSWORD)){
           return send(res,200,{configured:false,devices:[],summary:{total:0,online:0,offline:0,unknown:0},
-            events:[],updatedAt:null,message:'Configure RHID_API_TOKEN no Render para ativar o monitoramento.'});
+            events:[],updatedAt:null,message:'Configure RHID_LOGIN_EMAIL e RHID_LOGIN_PASSWORD no Render para ativar o login automático (ou RHID_API_TOKEN temporário).'});
         }
         const load=async()=>{
           const result=await RHiDMonitor.readDevices();
