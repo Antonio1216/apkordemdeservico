@@ -26,10 +26,14 @@
     el('login-form').reset();el('link-result').hidden=true;el('portal-link').value='';
     loginView(true);msg(message);
   }
-  async function action(form,fn){
+  async function action(form,fn,localStatus){
     const button=form.querySelector('[type=submit]');
     button.disabled=true;msg('Aguarde...');
-    try{await fn(new FormData(form));}catch(error){msg(error.message||'Falha na solicitação.');}
+    if(localStatus)localStatus.textContent='Salvando...';
+    try{await fn(new FormData(form));}catch(error){
+      const message=error.message||'Falha na solicitação.';
+      msg(message);if(localStatus)localStatus.textContent=message;
+    }
     finally{button.disabled=false;}
   }
   function selectOptions(select,items,prompt,allowNone=false){
@@ -38,6 +42,46 @@
     if(allowNone)select.add(new Option('Sem empresa — bloquear acesso','__sem_empresa__'));
     for(const item of items)select.add(new Option(item.nome,item.id));
     if(Array.from(select.options).some(o=>o.value===current))select.value=current;
+  }
+  function renderDelegations(){
+    const list=el('delegation-list');
+    const count=el('delegation-count');
+    if(!list||!count)return;
+    list.replaceChildren();
+    count.textContent=technicians.length+' técnico(s)';
+    if(!technicians.length){
+      const empty=document.createElement('p');
+      empty.className='hint';empty.textContent='Nenhum técnico cadastrado. Cadastre um técnico acima para delegar seu acesso.';
+      list.append(empty);return;
+    }
+    const sorted=[...technicians].sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
+    for(const technician of sorted){
+      const company=companies.find(x=>x.id===technician.empresaId);
+      const authorized=Boolean(company);
+      const card=document.createElement('article');
+      card.className='delegation-item'+(authorized?'':' unassigned');
+      const title=document.createElement('h4');title.textContent=technician.nome;card.append(title);
+      const login=document.createElement('p');login.textContent='Login: '+(technician.login||'Não informado');
+      card.append(login);
+      const assignment=document.createElement('p');
+      assignment.textContent='Empresa autorizada: '+(company?.nome||(technician.empresaId?'Empresa não encontrada':'Nenhuma'));
+      card.append(assignment);
+      const access=document.createElement('p');
+      access.className='delegation-access';
+      access.textContent=authorized?'Acesso aos chamados: autorizado para esta empresa':'Acesso aos chamados: não habilitado para clientes';
+      card.append(access);
+      const button=document.createElement('button');button.type='button';button.className='secondary';
+      button.textContent='Alterar delegação de '+technician.nome;
+      button.setAttribute('aria-label','Alterar delegação de '+technician.nome);
+      button.addEventListener('click',()=>{
+        el('delegate-tech').value=technician.id;
+        syncAssignment();
+        el('delegate-tech').focus();
+        el('delegate-form').scrollIntoView({block:'center',behavior:'smooth'});
+      });
+      card.append(button);
+      list.append(card);
+    }
   }
   async function refresh(){
     const [c,u]=await Promise.all([request('companies'),request('users')]);
@@ -49,6 +93,7 @@
     selectOptions(el('delegate-company'),companies,'Selecione a empresa',true);
     selectOptions(el('portal-company'),companies,'Selecione a empresa');
     syncAssignment();
+    renderDelegations();
   }
   function syncAssignment(){
     const technician=technicians.find(t=>t.id===el('delegate-tech').value);
@@ -145,10 +190,20 @@
     e.preventDefault();action(e.currentTarget,async f=>{
       const empresaId=f.get('empresaId')==='__sem_empresa__'?'':String(f.get('empresaId')||'');
       if(!empresaId&&f.get('empresaId')!=='__sem_empresa__')throw Error('Escolha uma empresa.');
-      await request('users/'+encodeURIComponent(String(f.get('tecnicoId')||''))+'/company','PUT',{empresaId});
-      const selected=f.get('tecnicoId');await refresh();el('delegate-tech').value=selected;syncAssignment();
-      msg(empresaId?'Delegação salva. O técnico só será oferecido aos clientes dessa empresa.':'Delegação removida. Técnico sem empresa atribuída.');
-    });
+      const selected=String(f.get('tecnicoId')||'');
+      await request('users/'+encodeURIComponent(selected)+'/company','PUT',{empresaId});
+      await refresh();
+      el('delegate-tech').value=selected;syncAssignment();
+      const saved=technicians.find(t=>t.id===selected);
+      if(!saved||String(saved.empresaId||'')!==empresaId){
+        throw Error('A delegação não foi confirmada na atualização. Consulte a lista e tente novamente.');
+      }
+      const message=empresaId?
+        'Delegação salva e confirmada! '+saved.nome+' está autorizado para '+companyName(empresaId)+'.':
+        'Delegação removida e confirmada. '+saved.nome+' não aparecerá para os clientes selecionarem.';
+      el('delegation-feedback').textContent=message;
+      msg(message);
+    },el('delegation-feedback'));
   });
   el('portal-form').addEventListener('submit',e=>{
     e.preventDefault();action(e.currentTarget,async f=>{
