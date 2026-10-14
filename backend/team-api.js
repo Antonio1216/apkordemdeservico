@@ -335,19 +335,54 @@ function teamApi(options={}) {
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Lista de empresas restrita ao administrador.'});
         return send(res,200,{companies:data.workspace.clients.map(safeCompany)});
       }
+      const cnpjRoute=p.match(/^companies\/cnpj\/([0-9A-Za-z.-]{14,20})$/);
+      if(req.method==='GET'&&cnpjRoute){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador consulta CNPJ.'});
+        const cnpj=Cnpj.normalizeCnpj(cnpjRoute[1]);
+        if(!Cnpj.validCnpj(cnpj))return send(res,400,{error:'CNPJ inválido. Confira o número informado.'});
+        if(!allowedAttempt(cnpjRequests,actor.id,30,10*60_000))
+          return send(res,429,{error:'Limite de consultas atingido. Aguarde alguns minutos.'});
+        const hit=cnpjCache.get(cnpj);
+        if(hit&&hit.expires>Date.now())return send(res,200,{empresa:hit.empresa,fonte:'BrasilAPI',cache:true});
+        const empresa=await Cnpj.lookupCnpj(cnpj,options.cnpjFetch||globalThis.fetch);
+        if(cnpjCache.size>=300)cnpjCache.clear();
+        cnpjCache.set(cnpj,{empresa,expires:Date.now()+30*60_000});
+        return send(res,200,{empresa,fonte:'BrasilAPI',cache:false});
+      }
       if(req.method==='POST'&&p==='companies'){
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode cadastrar empresas.'});
-        const b=await body(req),nome=typeof b.nome==='string'?b.nome.trim().replace(/\s+/g,' '):'';
+        const b=await body(req),nome=normCompany(b.nome);
         if(nome.length<3||nome.length>180)return send(res,400,{error:'Informe o nome da empresa (3 a 180 caracteres).'});
         if(data.workspace.clients.length>=1500)return send(res,409,{error:'Limite de empresas cadastradas atingido.'});
-        if(data.workspace.clients.some(x=>String(x.nome||x.razaoSocial||'').trim().toLocaleLowerCase('pt-BR')===nome.toLocaleLowerCase('pt-BR')))
-          return send(res,409,{error:'Essa empresa já está cadastrada.'});
-        const company={id:crypto.randomUUID(),nome,razaoSocial:nome};
+        if(!uniqueCompanyName(nome))return send(res,409,{error:'Essa empresa já está cadastrada.'});
+        const details=Cnpj.details(b);
+        if(!uniqueCnpj(details.cnpj))return send(res,409,{error:'CNPJ já cadastrado em outra empresa.'});
+        const company={id:crypto.randomUUID(),nome,razaoSocial:details.razaoSocial||nome};
         data.workspace.clients.push(company);
+        data.companyDetails[company.id]=details;
         data.workspace.revision++;
         writeAudit('company-create',actor.id);
         await persist();
-        return send(res,201,{company,revision:data.workspace.revision});
+        return send(res,201,{company:safeCompany(company),revision:data.workspace.revision});
+      }
+      const editCompany=p.match(/^companies\/([A-Za-z0-9_-]{1,100})$/);
+      if(req.method==='PATCH'&&editCompany){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode editar empresas.'});
+        const company=companyById(editCompany[1]);
+        if(!company)return send(res,404,{error:'Empresa não encontrada.'});
+        const b=await body(req),nome=normCompany(b.nome);
+        if(nome.length<3||nome.length>180)return send(res,400,{error:'Informe o nome da empresa (3 a 180 caracteres).'});
+        if(!uniqueCompanyName(nome,company.id))return send(res,409,{error:'Já existe outra empresa com esse nome.'});
+        const details={...detailFor(company),...Cnpj.details(b)};
+        if(!uniqueCnpj(details.cnpj,company.id))
+          return send(res,409,{error:'Este CNPJ já pertence a outra empresa cadastrada.'});
+        company.nome=nome;
+        company.razaoSocial=details.razaoSocial||nome;
+        data.companyDetails[company.id]=details;
+        data.workspace.revision++;
+        writeAudit('company-edit',actor.id);
+        await persist();
+        return send(res,200,{company:safeCompany(company),revision:data.workspace.revision});
       }
       if(req.method==='POST'&&p==='companies/link'){
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador vincula terceirizadas e clientes finais.'});
