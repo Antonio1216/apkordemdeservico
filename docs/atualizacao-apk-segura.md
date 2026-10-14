@@ -47,7 +47,7 @@ Crie ainda um backup **seguro e criptografado** da keystore original e das senha
 
 1. Certificar que o backup JSON do aplicativo e PDFs importantes foram guardados.
 2. Não utilizar artefatos antigos `app-debug.apk`, mesmo que tenham passado na compilação.
-3. Baixar apenas o artefato chamado `ACR-OS-Pro-v1.7.8-Atualizacao-Assinada` gerado pelo workflow manual após todas as validações.
+3. Baixar apenas o artefato chamado `ACR-OS-Pro-v1.7.9-Atualizacao-Assinada` gerado pelo workflow manual após todas as validações.
 4. Confirmar que o certificado é o mesmo do app instalado e que `versionCode` do novo aplicativo é maior.
 5. Atualizar sobre o aplicativo existente **sem desinstalar**.
 

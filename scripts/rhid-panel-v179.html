@@ -1,0 +1,36 @@
+    <section id="rhid" class="pane" aria-labelledby="rhid-title">
+      <div class="heading"><div><p class="eyebrow">MONITORAMENTO DE EQUIPAMENTOS</p><h1 id="rhid-title">RHiD — Status de Relógios</h1>
+        <p>Consulte se os equipamentos RHiD da Control iD estão conectados, acompanhe alterações de estado e gere relatórios.</p></div></div>
+      <div class="panel">
+        <h2>Conexão com o RHiD</h2>
+        <p id="rhid-message" class="hint" role="status" aria-live="polite">Preparando consulta segura ao RHiD...</p>
+        <p class="hint">O acesso à API é configurado no servidor Render. Nenhum usuário precisa informar sua senha RHiD no aplicativo.</p>
+        <p id="rhid-updated" class="hint"></p>
+        <div class="actions">
+          <button id="rhid-refresh" type="button" class="primary">Atualizar equipamentos</button>
+          <button id="rhid-export-pdf" type="button" class="outline">Gerar relatório PDF</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>Disponibilidade dos equipamentos</h2>
+        <div class="report-kpis" aria-live="polite">
+          <div><small>Total</small><strong id="rhid-total">—</strong></div>
+          <div><small>Online</small><strong id="rhid-online">—</strong></div>
+          <div><small>Offline</small><strong id="rhid-offline">—</strong></div>
+          <div><small>Não identificado</small><strong id="rhid-unknown">—</strong></div>
+        </div>
+        <div class="form-grid">
+          <label>Pesquisar equipamento <input id="rhid-search" type="search" placeholder="Nome, série ou empresa"></label>
+          <label>Situação <select id="rhid-status-filter"><option value="">Todos</option><option value="online">Online</option><option value="offline">Offline</option><option value="desconhecido">Não identificado</option></select></label>
+          <label>Empresa no ACR OS Pro <select id="rhid-company-filter"><option value="">Todas as empresas</option></select></label>
+        </div>
+        <div id="rhid-equipment-list" class="rhid-list" aria-live="polite"></div>
+      </div>
+      <div class="panel">
+        <h2>Histórico de alterações de conexão</h2>
+        <p class="hint">O histórico registra quando uma consulta detecta mudança de status. Não representa monitoramento contínuo durante períodos sem consulta.</p>
+        <div id="rhid-events" class="rhid-list"></div>
+        <p id="rhid-export-status" class="hint" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
