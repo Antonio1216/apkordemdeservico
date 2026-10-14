@@ -70,10 +70,10 @@ function teamApi(options={}) {
   function validPassword(v){return typeof v==='string'&&v.length>=6&&v.length<=128;}
   // Regras individuais persistidas na conta, nunca no armazenamento do aparelho.
   // A falta de configuração mantém o comportamento padrão dos técnicos atuais.
-  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro','catalogo','licencas','rhid'];
+  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro','catalogo','licencas','rhid','chamados'];
   const defaults=a=>a.perfil==='Administrador'
     ? Object.fromEntries(RIGHTS.map(k=>[k,true]))
-    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false,catalogo:false,licencas:false,rhid:false};
+    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false,catalogo:false,licencas:false,rhid:false,chamados:a.perfil==='Técnico'};
   const permissions=a=>{
     const preset=defaults(a);
     if(a.perfil==='Administrador')return preset;
@@ -314,7 +314,10 @@ function teamApi(options={}) {
         return send(res,200,{users:data.accounts.filter(x=>x.active!==false&&(scope===null||x.id===actor.id||
           x.perfil==='Técnico'&&x.empresaId===scope)).map(safe)});
       }
-      if(p==='tickets'||p.startsWith('tickets/')||p==='customer-portals')return desk.authenticatedHandle(req,res,p,actor);
+      if(p==='tickets'||p.startsWith('tickets/')||p==='customer-portals'){
+        if(actor.perfil!=='Administrador'&&actor.perfil!=='Técnico')return send(res,403,{error:'Chamados disponíveis apenas para técnicos e administradores.'});
+        return desk.authenticatedHandle(req,res,p,actor);
+      }
       if(p==='rhid-monitor' && req.method==='GET'){
         if(!can(actor,'rhid'))return send(res,403,{error:'Sem permissão para monitorar equipamentos RHiD.'});
         if(!process.env.RHID_API_TOKEN?.trim()&&!(process.env.RHID_LOGIN_EMAIL?.trim()&&process.env.RHID_LOGIN_PASSWORD)){
