@@ -3,6 +3,7 @@ const {test,after}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {spawn}=require('node:child_process');
+const vm=require('node:vm');
 const folder=fs.mkdtempSync(path.join(os.tmpdir(),'acr-linked-clients-'));
 const port=29000+Math.floor(Math.random()*10000),base='http://127.0.0.1:'+port;
 const key='backend-company-link-test-key-'+('z'.repeat(40));
@@ -76,4 +77,11 @@ test('cadastrar terceirizada e cliente final juntos, sem misturar chamados e emp
  assert.equal(saved.companyLinks[final.id],outs.id);
  assert.equal(saved.workspace.clients.length,3);
  assert.ok(!JSON.stringify(saved).includes(secret)); // client portal token hashed, not plaintext
+});
+
+test('scripts das páginas administrativas e do portal de cliente possuem JavaScript válido',()=>{
+ for(const name of ['admin-chamados.js','client-portal.js']){
+  const file=fs.readFileSync(path.join(__dirname,'..','public',name),'utf8');
+  assert.doesNotThrow(()=>new vm.Script(file,{filename:name}));
+ }
 });
