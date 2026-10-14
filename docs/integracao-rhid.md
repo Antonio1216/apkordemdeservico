@@ -15,7 +15,7 @@ Atualização automática a cada 5 minutos enquanto app visível; o Render reuti
 2. Obtenha o token Bearer da API RHiD v2, preferencialmente de integração somente leitura.
 3. Abra o serviço acr-os-pro-backend no Render > Environment.
 4. Defina RHID_API_TOKEN: coloque somente o token, sem o prefixo Bearer.
-5. RHID_DEVICE_URL (opcional): endereço HTTPS da API documentado para sua conta. O padrão técnico é https://www.rhid.com.br/v2/api/device; confirme com o RHiD qual é o endpoint exato de sua instância. O conector aceita somente rhid.com.br via HTTPS e caminhos sob /v2/ terminados em /device.
+5. RHID_DEVICE_URL (opcional): endereço HTTPS da API documentado para sua conta. O padrão técnico é https://www.rhid.com.br/v2/api.svc/device; confirme com o RHiD qual é o endpoint exato de sua instância. O conector aceita somente rhid.com.br via HTTPS e caminho exato /v2/api.svc/device.
 6. Salve, redeploy, e abra o aplicativo atualizado com usuário Administrador. Para técnicos, habilite a permissão Monitoramento RHiD no cadastro de usuários.
 
 Nunca cole senhas ou tokens no app, no chat ou no código do GitHub. Se expirar, atualize o token no Render.

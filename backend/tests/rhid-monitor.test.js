@@ -17,9 +17,11 @@ test('documentação RHiD: GET /device normaliza estados, seriais, datas e assoc
  assert.throws(()=>m.normalize({error:'unauthorized'}),/Formato/);
  assert.throws(()=>m.normalize({records:[{id:4},{id:4}]}),/duplicados/);
  assert.throws(()=>m.endpoint('http://localhost:8181/device'),/inválido/);
- assert.throws(()=>m.endpoint('https://www.rhid.com.br.evil.test/v2/api/device'),/inválido/);
- assert.throws(()=>m.endpoint('https://www.rhid.com.br/v2/api/device?token=abc'),/inválido/);
- assert.equal(m.endpoint('https://www.rhid.com.br/v2/api/device'),'https://www.rhid.com.br/v2/api/device');
+ assert.throws(()=>m.endpoint('https://www.rhid.com.br.evil.test/v2/api.svc/device'),/inválido/);
+ assert.throws(()=>m.endpoint('https://www.rhid.com.br/v2/api.svc/device?token=abc'),/inválido/);
+ assert.throws(()=>m.endpoint('https://www.rhid.com.br/v2/api/device'),/inválido/);
+ assert.equal(m.DEFAULT_URL,'https://www.rhid.com.br/v2/api.svc/device');
+ assert.equal(m.endpoint('https://www.rhid.com.br/v2/api.svc/device'),'https://www.rhid.com.br/v2/api.svc/device');
 });
 test('consulta faz GET somente no domínio autorizado e mantém Bearer fora da resposta',async()=>{
  let invoked=0;
