@@ -252,6 +252,41 @@ function teamApi(options={}) {
         tries.delete(login);return send(res,200,{token:makeToken(acc),account:safe(acc)});
       }
       const actor=verifyToken(req);if(!actor)return send(res,401,{error:'Sessão inválida ou expirada. Entre novamente.'});
+      // Enrollment is available only to a logged-in admin who re-enters their password.
+      if(p==='admin-totp/status'&&req.method==='GET'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Apenas o administrador pode configurar o autenticador.'});
+        return send(res,200,{enabled:Boolean(actor.totp?.secret)});
+      }
+      if(p==='admin-totp/setup'&&req.method==='POST'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Acesso restrito ao administrador.'});
+        if(actor.totp?.secret)return send(res,409,{error:'Autenticador já ativado. Para trocar, solicite um procedimento seguro ao suporte.'});
+        const b=await body(req);
+        const key='setup|'+String(req.socket.remoteAddress||'')+'|'+actor.id;
+        if(!allowedAttempt(adminTotpAttempts,key,5,10*60_000))return send(res,429,{error:'Muitas tentativas. Aguarde 10 minutos.'});
+        const check=passwordHash(String(b.senha||''),actor.salt);
+        if(!safeEq(check,actor.hash))return send(res,403,{error:'Senha do administrador incorreta.'});
+        const secret=Recovery.base32(crypto.randomBytes(20));
+        pendingTotp.set(actor.id,{secret,expires:Date.now()+10*60_000});
+        const issuer='ACR OS Pro';
+        const uri='otpauth://totp/'+encodeURIComponent(issuer+':'+actor.login)+'?secret='+secret+'&issuer='+encodeURIComponent(issuer)+'&algorithm=SHA1&digits=6&period=30';
+        return send(res,200,{secret,otpauth:uri,expiresInSeconds:600});
+      }
+      if(p==='admin-totp/confirm'&&req.method==='POST'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Acesso restrito ao administrador.'});
+        if(actor.totp?.secret)return send(res,409,{error:'Autenticador já ativado.'});
+        const key='activate|'+String(req.socket.remoteAddress||'')+'|'+actor.id;
+        if(!allowedAttempt(adminTotpAttempts,key,5,10*60_000))return send(res,429,{error:'Muitas tentativas. Aguarde 10 minutos.'});
+        const pending=pendingTotp.get(actor.id);
+        if(!pending||pending.expires<Date.now())return send(res,400,{error:'Configuração expirada. Inicie novamente.'});
+        const b=await body(req);
+        const used=Recovery.verifyTotp(pending.secret,b.code);
+        if(used<0)return send(res,403,{error:'Código do autenticador inválido.'});
+        actor.totp={secret:Recovery.encrypt(pending.secret,KEY),lastStep:used};
+        pendingTotp.delete(actor.id);
+        writeAudit('admin-totp-enable',actor.id);
+        await persist();
+        return send(res,200,{enabled:true});
+      }
       if(req.method==='GET'&&p==='me')return send(res,200,{account:safe(actor)});
       if(req.method==='GET'&&p==='users')return send(res,200,{users:data.accounts.filter(x=>x.active!==false).map(safe)});
       if(p==='rhid-monitor' && req.method==='GET'){
@@ -387,8 +422,11 @@ function teamApi(options={}) {
         if((!existing||b.senha) && !validPassword(b.senha))return send(res,400,{error:'Senha deve ter pelo menos 6 caracteres.'});
         if(existing?.id===actor.id&&perfil!=='Administrador')return send(res,403,{error:'Você não pode remover seu próprio perfil administrador.'});
         if(existing?.perfil==='Administrador'&&perfil!=='Administrador'&&!data.accounts.some(x=>x.id!==existing.id&&x.perfil==='Administrador'&&x.active!==false))return send(res,403,{error:'Mantenha ao menos um administrador.'});
-        const a=existing||{id:crypto.randomUUID(),rev:1,active:true};const oldRole=a.perfil;Object.assign(a,{login,nome,perfil});
-        if(oldRole&&oldRole!==perfil){a.permissions=defaults(a);a.rev++;}
+        const a=existing||{id:crypto.randomUUID(),rev:1,active:true};const oldRole=a.perfil;
+        const email=b.email===undefined?(existing?.email|| (validEmail(login)?login:'')):normalLogin(b.email);
+        if(email&&!validEmail(email))return send(res,400,{error:'E-mail de recuperação inválido.'});
+        Object.assign(a,{login,nome,perfil,email});
+        if(oldRole&&oldRole!==perfil){a.permissions=defaults(a);a.rev++;delete a.emailReset;delete a.totp;pendingTotp.delete(a.id);}
         if(b.senha){a.salt=crypto.randomBytes(16).toString('hex');a.hash=passwordHash(b.senha,a.salt);a.rev++;}
         if(!existing)data.accounts.push(a);writeAudit(existing?'user-update':'user-create',actor.id);await persist();return send(res,200,{user:safe(a)});
       }
