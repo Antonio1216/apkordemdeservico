@@ -40,6 +40,8 @@ function entryByToken(token){if(!/^[A-Za-z0-9_-]{40,90}$/.test(token))return nul
 const esc=x=>String(x||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const signPage=fs.readFileSync(path.join(__dirname,'public','sign.html'),'utf8');
 const publicJs=fs.readFileSync(path.join(__dirname,'public','sign.js'),'utf8');
+const resetPage=fs.readFileSync(path.join(__dirname,'public','password-reset.html'),'utf8');
+const resetJs=fs.readFileSync(path.join(__dirname,'public','password-reset.js'),'utf8');
 const officialLogo=fs.readFileSync(path.join(__dirname,'public','brand','acr-logo.jpg'));
 function receiptByToken(token){if(!/^[A-Za-z0-9_-]{40,90}$/.test(token))return null;const receiptHash=hash(token);return Object.values(records).find(r=>r.pdfReceiptHash===receiptHash&&r.status==='signed')||null;}
 const attempts=new Map();
@@ -53,6 +55,8 @@ const server=http.createServer(async(req,res)=>{
     const p=url.pathname;
     if(p.startsWith('/api/team/'))return await team.handle(req,res,p);
     if(req.method==='GET'&&p==='/health')return json(res,200,{ok:true,service:'OS Pro assinatura remota'});
+    if(req.method==='GET'&&p==='/password-reset')return text(res,200,resetPage,'text/html; charset=utf-8');
+    if(req.method==='GET'&&p==='/password-reset.js')return text(res,200,resetJs,'application/javascript; charset=utf-8');
     if(req.method==='GET'&&p==='/sign.js')return text(res,200,publicJs,'application/javascript; charset=utf-8');
     if(req.method==='GET'&&p==='/brand/acr-logo.jpg'){headers(res,200,{'Content-Type':'image/jpeg'});return res.end(officialLogo);}
     if(req.method==='GET'&&/^\/s\/[\w-]+$/.test(p)){
