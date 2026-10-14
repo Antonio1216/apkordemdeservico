@@ -123,7 +123,7 @@ async function readDevices({
   }
   if(!response.ok){
     if(response.status===401||response.status===403)
-      throw Object.assign(Error('Acesso ao RHiD recusado: token expirado ou usuário sem permissão para listar equipamentos.'),{status:502});
+      throw Object.assign(Error('Token RHiD expirado ou usuário sem permissão para listar equipamentos.'),{status:502});
     throw Object.assign(Error('Não foi possível consultar os equipamentos RHiD (HTTP '+response.status+').'),{status:502});
   }
   const contentType=response.headers?.get?.('content-type')||'';
