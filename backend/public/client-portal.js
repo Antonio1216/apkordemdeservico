@@ -65,6 +65,26 @@
   },()=>{state.location=null;$('#location-state').textContent='Localização não enviada.';},
   {enableHighAccuracy:true,timeout:12000,maximumAge:0});
  });
+ async function optimized(file){
+  if(file.size<=500000)return file;
+  if(!file.type.startsWith('image/'))throw Error('O PDF deve ter até 500 KB.');
+  if(typeof createImageBitmap!=='function')throw Error('Reduza a foto para menos de 500 KB.');
+  const bitmap=await createImageBitmap(file);
+  try{
+   for(const width of [1300,1100,900,700]){
+    const scale=Math.min(1,width/Math.max(bitmap.width,bitmap.height));
+    const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.floor(bitmap.width*scale));
+    canvas.height=Math.max(1,Math.floor(bitmap.height*scale));
+    const context=canvas.getContext('2d');
+    context.drawImage(bitmap,0,0,canvas.width,canvas.height);
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.68));
+    if(blob&&blob.size<=500000){
+     return new File([blob],file.name.replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'});
+    }
+   }
+  }finally{bitmap.close();}
+  throw Error('Não foi possível reduzir a imagem. Escolha uma foto menor.');
+ }
  function dataUrl(file){return new Promise((resolve,reject)=>{
   const reader=new FileReader();
   reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');
@@ -80,10 +100,10 @@
    if(files.length>2)throw Error('Selecione no máximo duas evidências.');
    const evidencias=[];
    for(const file of files){
-    if(file.size>500000)throw Error('Cada evidência deve ter até 500 KB.');
     if(!['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type))
      throw Error('Anexe apenas imagem JPEG/PNG/WebP ou PDF.');
-    evidencias.push({name:file.name,mime:file.type,data:await dataUrl(file)});
+    const prepared=await optimized(file);
+    evidencias.push({name:prepared.name,mime:prepared.type,data:await dataUrl(prepared)});
    }
    const response=await api('customer/tickets','POST',{
     tipo:form.elements.tipo.value,localEquipamento:form.elements.localEquipamento.value,
