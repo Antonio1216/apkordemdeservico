@@ -1,4 +1,4 @@
-name: ACR OS Pro - Compilacao segura e atualizacao com assinatura permanente
+name: ACR OS Pro 1.7.9 - Monitoramento RHiD (compilacao e assinatura segura)
 
 on:
   pull_request:
@@ -21,6 +21,10 @@ on:
       - 'scripts/licenses-v178.js'
       - 'scripts/licenses-panel-v178.html'
       - 'backend/license-utils.js'
+      - 'backend/rhid-monitor.js'
+      - 'scripts/add-rhid-v179.py'
+      - 'scripts/rhid-v179.js'
+      - 'scripts/rhid-panel-v179.html'
       - 'scripts/sign-android-update.sh'
   push:
     branches: [main]
@@ -43,6 +47,10 @@ on:
       - 'scripts/licenses-v178.js'
       - 'scripts/licenses-panel-v178.html'
       - 'backend/license-utils.js'
+      - 'backend/rhid-monitor.js'
+      - 'scripts/add-rhid-v179.py'
+      - 'scripts/rhid-v179.js'
+      - 'scripts/rhid-panel-v179.html'
       - 'scripts/sign-android-update.sh'
   workflow_dispatch:
 
@@ -74,6 +82,8 @@ jobs:
           python scripts/add-travel-v176.py ospro-eletrica-software
           python scripts/add-reports-v177.py ospro-eletrica-software
           python scripts/add-licenses-v178.py ospro-eletrica-software
+          python scripts/add-rhid-v179.py ospro-eletrica-software
+          node --check ospro-eletrica-software/app/src/main/assets/rhid.js
           node --check ospro-eletrica-software/app/src/main/assets/licenses.js
           node --check ospro-eletrica-software/app/src/main/assets/license-utils.js
           node --check ospro-eletrica-software/app/src/main/assets/reports.js
@@ -84,7 +94,7 @@ jobs:
           node --check ospro-eletrica-software/app/src/main/assets/auth.js
           node --check ospro-eletrica-software/app/src/main/assets/permissions.js
           node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'versionName = "1.7.8"' ospro-eletrica-software/app/build.gradle.kts
+          grep -q 'versionName = "1.7.9"' ospro-eletrica-software/app/build.gradle.kts
           python - <<'PY'
           from pathlib import Path
           root=Path('ospro-eletrica-software/app/src/main')
@@ -96,6 +106,11 @@ jobs:
           assert (root/'assets/travel.js').exists()
           assert (root/'assets/reports.js').exists()
           assert (root/'assets/licenses.js').exists()
+          assert (root/'assets/rhid.js').exists()
+          assert 'id="rhid-equipment-list"' in h
+          assert 'data-tab="rhid"' in h
+          assert 'data-permission="rhid"' in h
+          assert '"rhid"->"Monitoramento-RHiD"' in code
           assert (root/'assets/license-utils.js').exists()
           assert 'id="license-form"' in h
           assert 'name="quantidade"' in h and 'name="valorUnitario"' in h
@@ -177,14 +192,14 @@ jobs:
           ACR_SIGNER_SHA256: ${{ vars.ACR_SIGNER_SHA256 }}
         run: |
           set -euo pipefail
-          bash scripts/sign-android-update.sh ospro-eletrica-software dist/ACR-OS-Pro-v1.7.8-Atualizacao-Assinada.apk
+          bash scripts/sign-android-update.sh ospro-eletrica-software dist/ACR-OS-Pro-v1.7.9-Atualizacao-Assinada.apk
 
       - name: Publicar SOMENTE APK validado (nunca DEBUG)
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.8-Atualizacao-Assinada
-          path: dist/ACR-OS-Pro-v1.7.8-Atualizacao-Assinada.apk
+          name: ACR-OS-Pro-v1.7.9-Atualizacao-Assinada
+          path: dist/ACR-OS-Pro-v1.7.9-Atualizacao-Assinada.apk
           retention-days: 30
           if-no-files-found: error
 
@@ -195,14 +210,14 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile, ZIP_DEFLATED
           root=Path('ospro-eletrica-software')
-          with ZipFile('ACR-OS-Pro-v1.7.8-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
+          with ZipFile('ACR-OS-Pro-v1.7.9-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
               for item in root.rglob('*'):
                   if item.is_file() and not {'.gradle','build','.idea'}.intersection(item.parts):
                       archive.write(item)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.8-Fonte
-          path: ACR-OS-Pro-v1.7.8-Fonte.zip
+          name: ACR-OS-Pro-v1.7.9-Fonte
+          path: ACR-OS-Pro-v1.7.9-Fonte.zip
           retention-days: 30
           if-no-files-found: error
