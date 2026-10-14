@@ -6,6 +6,7 @@
   const escapeText=x=>String(x??'');
   const unique=arr=>Array.isArray(arr)?arr:[];
   const companyName=id=>companies.find(c=>c.id===id)?.nome||'Empresa não encontrada';
+  const isContractor=c=>c?.tipoEmpresa==='terceirizada';
   async function request(p,method='GET',data,needAuth=true){
     const headers={'Accept':'application/json'};
     if(needAuth){if(!bearer)throw Error('Faça login novamente.');headers.Authorization='Bearer '+bearer;}
@@ -57,7 +58,7 @@
     const sorted=[...technicians].sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
     for(const technician of sorted){
       const company=companies.find(x=>x.id===technician.empresaId);
-      const authorized=Boolean(company);
+      const authorized=Boolean(company)&&!isContractor(company);
       const card=document.createElement('article');
       card.className='delegation-item'+(authorized?'':' unassigned');
       const title=document.createElement('h4');title.textContent=technician.nome;card.append(title);
@@ -83,6 +84,39 @@
       list.append(card);
     }
   }
+  function refreshCompanyLinks(){
+    const outsource=el('outsourcing-company'),final=el('final-company');
+    const previousOutsource=outsource.value,previousFinal=final.value;
+    outsource.replaceChildren(new Option('Cadastrar nova terceirizada','__nova__'));
+    final.replaceChildren(new Option('Cadastrar novo cliente final','__nova__'));
+    for(const c of companies){
+      if(c.tipoEmpresa!=='cliente-final')outsource.add(new Option(c.nome,c.id));
+      if(!isContractor(c))final.add(new Option(c.nome,c.id));
+    }
+    outsource.value=[...outsource.options].some(o=>o.value===previousOutsource)?previousOutsource:'__nova__';
+    final.value=[...final.options].some(o=>o.value===previousFinal)?previousFinal:'__nova__';
+    toggleCompanyInputs();
+    const list=el('company-link-list');list.replaceChildren();
+    const linked=companies.filter(x=>x.tipoEmpresa==='cliente-final'&&x.terceirizadaId);
+    if(!linked.length){const note=document.createElement('p');note.className='hint';note.textContent='Nenhum vínculo cadastrado ainda.';list.append(note);return;}
+    for(const c of linked){
+      const card=document.createElement('article');card.className='relationship';
+      const name=document.createElement('strong');name.textContent=c.nome;card.append(name);
+      const p=document.createElement('p');p.textContent='Terceirizada responsável: '+(c.terceirizadaNome||companyName(c.terceirizadaId));
+      card.append(p);list.append(card);
+    }
+  }
+  function toggleCompanyInputs(){
+    for(const [selectId,labelId,inputId] of [
+      ['outsourcing-company','outsourcing-new-label','outsourcing-new'],
+      ['final-company','final-new-label','final-new']
+    ]){
+      const create=el(selectId).value==='__nova__';
+      el(labelId).hidden=!create;
+      el(inputId).required=create;
+      if(!create)el(inputId).value='';
+    }
+  }
   async function refresh(){
     const [c,u]=await Promise.all([request('companies'),request('users')]);
     companies=unique(c.companies);
@@ -90,10 +124,12 @@
     el('companies-count').textContent=companies.length+' empresa(s) cadastrada(s).';
     el('technicians-count').textContent=technicians.length+' técnico(s) cadastrado(s).';
     selectOptions(el('delegate-tech'),technicians.map(t=>({id:t.id,nome:t.nome+' — '+(t.empresaId?companyName(t.empresaId):'Sem empresa')})),'Selecione um técnico');
-    selectOptions(el('delegate-company'),companies,'Selecione a empresa',true);
-    selectOptions(el('portal-company'),companies,'Selecione a empresa');
+    const customerCompanies=companies.filter(c=>!isContractor(c));
+    selectOptions(el('delegate-company'),customerCompanies,'Selecione o cliente final',true);
+    selectOptions(el('portal-company'),customerCompanies,'Selecione o cliente final');
     syncAssignment();
     renderDelegations();
+    refreshCompanyLinks();
   }
   function syncAssignment(){
     const technician=technicians.find(t=>t.id===el('delegate-tech').value);
@@ -112,7 +148,9 @@
     for(const t of latestTickets){
       const article=document.createElement('article');article.className='chamado';
       const h=document.createElement('h3');h.textContent=(t.tipo||'Chamado')+' — '+(t.status||'Aberto');article.append(h);
-      line(article,'Empresa: '+companyName(t.empresaId));
+      const company=companies.find(c=>c.id===t.empresaId);
+      line(article,'Cliente final: '+companyName(t.empresaId));
+      if(company?.terceirizadaId)line(article,'Terceirizada responsável: '+(company.terceirizadaNome||companyName(company.terceirizadaId)));
       line(article,'Técnico: '+(technicians.find(x=>x.id===t.tecnicoId)?.nome||'Não identificado'));
       line(article,'Equipamento / Local: '+(t.equipamento||'Sem identificação')+' / '+(t.localEquipamento||'Não informado'));
       line(article,'Problema: '+(t.descricao||''));
@@ -167,6 +205,28 @@
   el('refresh').addEventListener('click',async()=>{try{await refresh();await refreshTickets();msg('Dados atualizados.');}catch(e){msg(e.message);}});
   el('logout').addEventListener('click',()=>logout());
   el('delegate-tech').addEventListener('change',syncAssignment);
+  el('outsourcing-company').addEventListener('change',toggleCompanyInputs);
+  el('final-company').addEventListener('change',toggleCompanyInputs);
+  el('company-link-form').addEventListener('submit',e=>{
+    e.preventDefault();action(e.currentTarget,async f=>{
+      const outsourcedId=String(f.get('terceirizadaId')||'');
+      const finalId=String(f.get('clienteFinalId')||'');
+      const body={
+        ...(outsourcedId==='__nova__'?{terceirizadaNome:String(f.get('terceirizadaNome')||'').trim()}:{terceirizadaId:outsourcedId}),
+        ...(finalId==='__nova__'?{clienteFinalNome:String(f.get('clienteFinalNome')||'').trim()}:{clienteFinalId:finalId})
+      };
+      const saved=await request('companies/link','POST',body);
+      await refresh();
+      const customer=companies.find(x=>x.id===saved.clienteFinal.id);
+      if(!customer||customer.terceirizadaId!==saved.terceirizada.id)throw Error('Vínculo criado, mas não foi possível verificar a atualização. Recarregue os dados.');
+      el('delegate-company').value=customer.id;
+      el('portal-company').value=customer.id;
+      e.currentTarget.reset();toggleCompanyInputs();
+      const confirmation='Vínculo salvo: '+saved.terceirizada.nome+' atende '+saved.clienteFinal.nome+'. Selecione um técnico para o cliente final.';
+      el('company-link-feedback').textContent=confirmation;
+      msg(confirmation);
+    },el('company-link-feedback'));
+  });
   el('new-company-form').addEventListener('submit',e=>{
     e.preventDefault();action(e.currentTarget,async f=>{
       const c=await request('companies','POST',{nome:String(f.get('nome')||'').trim()});
