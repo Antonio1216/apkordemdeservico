@@ -368,6 +368,8 @@ function teamApi(options={}) {
         if(outsourcing.create)data.workspace.clients.push(outsourcing.company);
         if(final.create)data.workspace.clients.push(final.company);
         data.companyLinks[final.company.id]=outsourcing.company.id;
+        // A terceirizada não é o cliente final; invalidar antigos links diretos de atendimento.
+        if(data.clientPortals)delete data.clientPortals[outsourcing.company.id];
         data.workspace.revision++;
         writeAudit('company-outsourcing-link',actor.id);
         await persist();
