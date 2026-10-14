@@ -218,6 +218,7 @@
       const create=el(selectId).value==='__nova__';
       el(labelId).hidden=!create;
       el(inputId).required=create;
+      el(selectId==='outsourcing-company'?'outsourcing-new-fields':'final-new-fields').hidden=!create;
       if(!create)el(inputId).value='';
     }
   }
@@ -310,15 +311,37 @@
   el('refresh').addEventListener('click',async()=>{try{await refresh();await refreshTickets();msg('Dados atualizados.');}catch(e){msg(e.message);}});
   el('logout').addEventListener('click',()=>logout());
   el('delegate-tech').addEventListener('change',syncAssignment);
+  el('company-filter').addEventListener('input',renderCompanies);
+  el('cancel-company-edit').addEventListener('click',()=>{resetCompanyEdit();el('company-feedback').textContent='Edição cancelada.';});
+  for(const [kind,id,button] of [
+    ['company','company-cnpj','lookup-company'],
+    ['outsourcing','outsourcing-cnpj','lookup-outsourcing'],
+    ['final','final-cnpj','lookup-final']
+  ]){
+    el(button).addEventListener('click',()=>lookupCompany(kind));
+    el(id).addEventListener('input',()=>scheduleCnpjLookup(kind));
+    el(id).addEventListener('blur',()=>{
+      if(cleanCnpj(el(id).value).length===14)lookupCompany(kind);
+    });
+  }
   el('outsourcing-company').addEventListener('change',toggleCompanyInputs);
   el('final-company').addEventListener('change',toggleCompanyInputs);
   el('company-link-form').addEventListener('submit',e=>{
     e.preventDefault();action(e.currentTarget,async f=>{
       const outsourcedId=String(f.get('terceirizadaId')||'');
       const finalId=String(f.get('clienteFinalId')||'');
+      const outCnpj=cleanCnpj(f.get('terceirizadaCnpj')),finalCnpj=cleanCnpj(f.get('clienteFinalCnpj'));
       const body={
-        ...(outsourcedId==='__nova__'?{terceirizadaNome:String(f.get('terceirizadaNome')||'').trim()}:{terceirizadaId:outsourcedId}),
-        ...(finalId==='__nova__'?{clienteFinalNome:String(f.get('clienteFinalNome')||'').trim()}:{clienteFinalId:finalId})
+        ...(outsourcedId==='__nova__'?{
+          terceirizadaNome:String(f.get('terceirizadaNome')||'').trim(),
+          terceirizadaCnpj:outCnpj,
+          terceirizadaDetalhes:lookupMemory.outsourcing?.cnpj===outCnpj?lookupMemory.outsourcing:{}
+        }:{terceirizadaId:outsourcedId}),
+        ...(finalId==='__nova__'?{
+          clienteFinalNome:String(f.get('clienteFinalNome')||'').trim(),
+          clienteFinalCnpj:finalCnpj,
+          clienteFinalDetalhes:lookupMemory.final?.cnpj===finalCnpj?lookupMemory.final:{}
+        }:{clienteFinalId:finalId})
       };
       const saved=await request('companies/link','POST',body);
       await refresh();
@@ -326,7 +349,7 @@
       if(!customer||customer.terceirizadaId!==saved.terceirizada.id)throw Error('Vínculo criado, mas não foi possível verificar a atualização. Recarregue os dados.');
       el('delegate-company').value=customer.id;
       el('portal-company').value=customer.id;
-      e.currentTarget.reset();toggleCompanyInputs();
+      e.currentTarget.reset();lookupMemory.outsourcing=null;lookupMemory.final=null;toggleCompanyInputs();
       const confirmation='Vínculo salvo: '+saved.terceirizada.nome+' atende '+saved.clienteFinal.nome+'. Selecione um técnico para o cliente final.';
       el('company-link-feedback').textContent=confirmation;
       msg(confirmation);
@@ -334,10 +357,13 @@
   });
   el('new-company-form').addEventListener('submit',e=>{
     e.preventDefault();action(e.currentTarget,async f=>{
-      const c=await request('companies','POST',{nome:String(f.get('nome')||'').trim()});
-      e.currentTarget.reset();await refresh();
+      const body=Object.fromEntries(companyFields.map(key=>[key,String(f.get(key)||'').trim()]));
+      const editId=editingCompanyId;
+      const c=await request(editId?'companies/'+encodeURIComponent(editId):'companies',editId?'PATCH':'POST',body);
+      resetCompanyEdit();await refresh();
       if(c.company?.id)el('portal-company').value=c.company.id;
-      msg('Empresa cadastrada. Agora delegue o técnico responsável.');
+      const message=editId?'Empresa atualizada com sucesso: '+c.company.nome+'.':'Empresa cadastrada: '+c.company.nome+'.';
+      el('company-feedback').textContent=message;msg(message);
     });
   });
   el('new-tech-form').addEventListener('submit',e=>{
