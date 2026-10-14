@@ -396,6 +396,31 @@ function teamApi(options={}) {
         if(b.revision!==data.workspace.revision)return send(res,409,{error:'Outro aparelho atualizou os dados. Sincronize para evitar perda de informações.',revision:data.workspace.revision});
         if(!validCollection(b.clients,1500)||!validCollection(b.orders,3500)||!validCollection(b.drafts,250))return send(res,400,{error:'Lista inválida de clientes ou ordens.'});
         if(can(actor,'financeiro')&&!validCollection(b.finance,3500))return send(res,400,{error:'Lista financeira inválida.'});
+        // Empresa delegada: validar tudo e fazer merge apenas da sua empresa.
+        // Nunca permitir que um PUT parcial apague dados de outras empresas.
+        if(isScoped(actor)){
+          const company=scopeFor(actor);
+          if(!companyIds().has(company))return send(res,403,{error:'Seu perfil ainda não possui uma empresa válida atribuída.'});
+          const ownClients=data.workspace.clients.filter(x=>x.id===company);
+          if(b.clients.length!==ownClients.length||b.clients.some(x=>!ownClients.some(y=>y.id===x.id&&JSON.stringify(y)===JSON.stringify(x))))
+            return send(res,403,{error:'Técnico não pode alterar o cadastro das empresas.'});
+          if(!can(actor,'ordens')&&(b.orders.length||b.drafts.length))
+            return send(res,403,{error:'Sem permissão para ordens de serviço.'});
+          if(b.orders.some(x=>!belongsCompany(x,company))||b.drafts.some(x=>!belongsCompany(x,company)))
+            return send(res,403,{error:'Ordem ou rascunho de outra empresa, ou sem empresa identificada.'});
+          if(Array.isArray(b.finance)&&b.finance.length)
+            return send(res,403,{error:'Lançamentos financeiros são restritos à gestão administrativa neste perfil.'});
+          const oldOrders=data.workspace.orders.filter(x=>belongsCompany(x,company));
+          if(oldOrders.some(old=>!b.orders.some(x=>x.id===old.id&&JSON.stringify(x)===JSON.stringify(old))))
+            return send(res,403,{error:'Técnicos não podem excluir nem alterar OS finalizadas.'});
+          const nextOrders=data.workspace.orders.filter(x=>!belongsCompany(x,company)).concat(b.orders);
+          const nextDrafts=data.workspace.drafts.filter(x=>!belongsCompany(x,company)).concat(b.drafts);
+          const seen=new Set();
+          if(nextOrders.some(x=>seen.has(x.id)||!seen.add(x.id)))return send(res,409,{error:'Número interno da ordem duplicado.'});
+          data.workspace={...data.workspace,revision:data.workspace.revision+1,orders:nextOrders,drafts:nextDrafts};
+          writeAudit('workspace-update-company',actor.id);
+          await persist();return send(res,200,stateFor(actor));
+        }
         if(can(actor,'financeiro')){
           for(const expense of b.finance){
             if(expense.categoria!=='viagem')continue;
