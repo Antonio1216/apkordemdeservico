@@ -352,13 +352,21 @@ function teamApi(options={}) {
             return send(res,502,{error:'Não foi possível consultar o RHiD. Confira token, permissão de API e endereço da integração no Render.'});
           }
         }
-        return send(res,200,{...rhidCache.value,events:data.rhidMonitor.events.slice(-50).reverse()});
+        const sc=scopeFor(actor);
+        const selected=sc===null?rhidCache.value.devices:rhidCache.value.devices.filter(x=>x.empresaId===sc);
+        return send(res,200,{...rhidCache.value,devices:selected,summary:RHiDMonitor.summary(selected),
+          events:sc===null?data.rhidMonitor.events.slice(-50).reverse():[]});
       }
       if(p==='licenses'){
         if(!can(actor,'licencas'))return send(res,403,{error:'Sem permissão para gerenciar licenças de software.'});
-        const safeLicenses=()=>({revision:data.licenses.revision,items:data.licenses.items,companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome||x.razaoSocial||'Empresa'}))});
+        const safeLicenses=()=>{
+          const scope=scopeFor(actor);
+          return {revision:data.licenses.revision,items:scope===null?data.licenses.items:data.licenses.items.filter(x=>x.empresaId===scope),
+            companies:data.workspace.clients.filter(x=>scope===null||x.id===scope).map(x=>({id:x.id,nome:x.nome||x.razaoSocial||'Empresa'}))};
+        };
         if(req.method==='GET')return send(res,200,safeLicenses());
         if(req.method==='PUT'){
+          if(isScoped(actor))return send(res,403,{error:'Técnico delegado não pode modificar licenças de outras empresas.'});
           const b=await body(req);
           if(!b||!Number.isInteger(b.revision)||!Array.isArray(b.items)||b.items.length>2500)
             return send(res,400,{error:'Lista de licenças inválida (até 2.500 itens).'});
@@ -380,8 +388,14 @@ function teamApi(options={}) {
       }
       if(p==='catalog'){
         if(!can(actor,'catalogo'))return send(res,403,{error:'Sem permissão para o catálogo e equipamentos.'});
-        if(req.method==='GET')return send(res,200,{...data.catalog,companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome}))});
+        if(req.method==='GET'){
+          const scope=scopeFor(actor),filter=a=>scope===null?a:a.filter(x=>x.empresaId===scope);
+          return send(res,200,{revision:data.catalog.revision,
+            services:filter(data.catalog.services),products:filter(data.catalog.products),equipments:filter(data.catalog.equipments),
+            companies:data.workspace.clients.filter(x=>scope===null||x.id===scope).map(x=>({id:x.id,nome:x.nome}))});
+        }
         if(req.method==='PUT'){
+          if(isScoped(actor))return send(res,403,{error:'Técnico delegado não pode alterar o catálogo corporativo.'});
           const b=await body(req),err=validateCatalog(b);
           if(err)return send(res,400,{error:err});
           if(b.revision!==data.catalog.revision)return send(res,409,{error:'Catálogo alterado em outro aparelho. Atualize antes de salvar.',revision:data.catalog.revision});
@@ -401,7 +415,7 @@ function teamApi(options={}) {
         if(isScoped(actor)){
           const company=scopeFor(actor);
           if(!companyIds().has(company))return send(res,403,{error:'Seu perfil ainda não possui uma empresa válida atribuída.'});
-          const ownClients=data.workspace.clients.filter(x=>x.id===company);
+          const ownClients=can(actor,'clientes')?data.workspace.clients.filter(x=>x.id===company):[];
           if(b.clients.length!==ownClients.length||b.clients.some(x=>!ownClients.some(y=>y.id===x.id&&JSON.stringify(y)===JSON.stringify(x))))
             return send(res,403,{error:'Técnico não pode alterar o cadastro das empresas.'});
           if(!can(actor,'ordens')&&(b.orders.length||b.drafts.length))
@@ -520,6 +534,6 @@ function teamApi(options={}) {
       return send(res,404,{error:'Rota não encontrada.'});
     }catch(e){console.error('Equipe API',e.message);return send(res,e.status||500,{error:e.status?e.message:'Erro interno no servidor.'});}
   }
-  return {handle,getActor:verifyToken,hasPermission:(req,right)=>can(verifyToken(req),right)};
+  return {handle,getActor:verifyToken,hasPermission:(req,right)=>{const actor=verifyToken(req);return can(actor,right)&&(!isScoped(actor)||!['links','assinaturas'].includes(right));}};
 }
 module.exports={teamApi};
