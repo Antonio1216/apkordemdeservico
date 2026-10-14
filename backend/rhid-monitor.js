@@ -1,12 +1,12 @@
 'use strict';
 /* RHiD Control iD: read-only device inventory; no activation keys or passwords stored. */
-const DEFAULT_URL='https://www.rhid.com.br/v2/api/device';
+const DEFAULT_URL='https://www.rhid.com.br/v2/api.svc/device';
 function endpoint(value=DEFAULT_URL){
   const url=new URL(value);
   if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash||url.port||
       !['www.rhid.com.br','rhid.com.br'].includes(url.hostname.toLowerCase())||
-      !/^\/v2\/(?:[a-z0-9._-]+\/)*device\/?$/i.test(url.pathname))
-    throw Error('Endereço da API RHiD inválido: use HTTPS no domínio oficial rhid.com.br e o caminho /device.');
+      !/^\/v2\/api\.svc\/device\/?$/i.test(url.pathname))
+    throw Error('Endereço da API RHiD inválido: use HTTPS no domínio oficial rhid.com.br e o caminho /v2/api.svc/device.');
   return url.toString();
 }
 const clean=(v,max=160)=>typeof v==='string'?v.trim().slice(0,max):'';
