@@ -311,7 +311,7 @@ function teamApi(options={}) {
       }
       if(req.method==='POST'&&p==='companies'){
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode cadastrar empresas.'});
-        const b=await body(req),nome=typeof b.nome==='string'?b.nome.trim().replace(/\\s+/g,' '):'';
+        const b=await body(req),nome=typeof b.nome==='string'?b.nome.trim().replace(/\s+/g,' '):'';
         if(nome.length<3||nome.length>180)return send(res,400,{error:'Informe o nome da empresa (3 a 180 caracteres).'});
         if(data.workspace.clients.length>=1500)return send(res,409,{error:'Limite de empresas cadastradas atingido.'});
         if(data.workspace.clients.some(x=>String(x.nome||x.razaoSocial||'').trim().toLocaleLowerCase('pt-BR')===nome.toLocaleLowerCase('pt-BR')))
