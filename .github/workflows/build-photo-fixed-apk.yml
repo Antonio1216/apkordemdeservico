@@ -25,6 +25,8 @@ on:
       - 'backend/team-api.js'
       - 'backend/tests/rhid-monitor.test.js'
       - 'scripts/add-rhid-v179.py'
+      - 'scripts/add-recovery-v180.py'
+      - 'scripts/recovery-ui-v180.js'
       - 'scripts/rhid-v179.js'
       - 'scripts/rhid-panel-v179.html'
       - 'scripts/sign-android-update.sh'
@@ -53,6 +55,8 @@ on:
       - 'backend/team-api.js'
       - 'backend/tests/rhid-monitor.test.js'
       - 'scripts/add-rhid-v179.py'
+      - 'scripts/add-recovery-v180.py'
+      - 'scripts/recovery-ui-v180.js'
       - 'scripts/rhid-v179.js'
       - 'scripts/rhid-panel-v179.html'
       - 'scripts/sign-android-update.sh'
@@ -87,6 +91,8 @@ jobs:
           python scripts/add-reports-v177.py ospro-eletrica-software
           python scripts/add-licenses-v178.py ospro-eletrica-software
           python scripts/add-rhid-v179.py ospro-eletrica-software
+          python scripts/add-recovery-v180.py ospro-eletrica-software
+          node --check ospro-eletrica-software/app/src/main/assets/recovery-ui.js
           node --check ospro-eletrica-software/app/src/main/assets/rhid.js
           node --check ospro-eletrica-software/app/src/main/assets/licenses.js
           node --check ospro-eletrica-software/app/src/main/assets/license-utils.js
