@@ -30,6 +30,15 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 .alert{background:#fff2d6;border:1px solid #e9c681;padding:12px;border-radius:9px}
 .chamado{padding:16px;border:1px solid #cfdfed;border-left:4px solid #1473ac;border-radius:9px;margin:12px 0}
 .badge{font-size:.88rem;font-weight:700;color:#144876}
+.delegation-heading{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-top:22px}
+.delegation-list{display:grid;gap:10px;margin-top:10px}
+.delegation-item{background:#f8fbfe;border:1px solid #d0dfeb;border-left:4px solid #1573a3;border-radius:9px;padding:13px}
+.delegation-item.unassigned{border-left-color:#a86c2b}
+.delegation-item h4{font-size:1rem;margin:0 0 5px}
+.delegation-item p{margin:3px 0;overflow-wrap:anywhere}
+.delegation-access{font-weight:700;color:#0d603f}
+.delegation-item.unassigned .delegation-access{color:#875119}
+.delegation-item button{margin-top:9px}
 [hidden]{display:none!important}
 @media(max-width:500px){header{padding:18px 16px}main{padding:10px}.actions button{flex:1 1 auto}}
 </style>
@@ -98,7 +107,15 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 </div>
 <button type="submit">Salvar delegação</button>
 </form>
-<p class="hint">A opção Sem empresa bloqueia o vínculo do técnico. Um técnico só poderá ser selecionado pelos clientes da empresa atribuída.</p>
+<p class="hint">Sem empresa atribuída, o técnico não poderá ser selecionado pelo cliente na abertura de chamados.</p>
+<p id="delegation-feedback" class="status" role="status" aria-live="polite"></p>
+<div class="delegation-heading">
+<h3 id="delegation-list-title">Técnicos e acessos registrados</h3>
+<span id="delegation-count" class="hint" aria-live="polite"></span>
+</div>
+<div id="delegation-list" class="delegation-list" aria-labelledby="delegation-list-title" aria-live="polite">
+Carregando técnicos...
+</div>
 </section>
 <section aria-labelledby="portal-title">
 <h2 id="portal-title">4. Gerar acesso privado do cliente</h2>
