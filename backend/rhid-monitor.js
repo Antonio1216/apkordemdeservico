@@ -36,26 +36,101 @@ function normalize(body){
       ultimaConexao:iso(r.lastConnectionDate),ultimaSincronizacao:iso(r.lastSyncDate)};
   });
 }
-async function readDevices({token=process.env.RHID_API_TOKEN,url=process.env.RHID_DEVICE_URL||DEFAULT_URL,fetcher=fetch}={}){
-  if(!token||typeof token!=='string'||!token.trim())return {configured:false,devices:[]};
-  // Reject malformed tokens and block header injection; do not ever log credential.
-  if(token.length>8192||/[\r\n]/.test(token))throw Error('Token RHiD inválido.');
-  const response=await fetcher(endpoint(url),{
-    method:'GET',redirect:'error',headers:{Authorization:'Bearer '+token.trim(),Accept:'application/json'},
-    signal:AbortSignal.timeout(9000)});
-  if(!response.ok){
-    if(response.status===401||response.status===403)throw Object.assign(Error('Token RHiD inválido ou sem permissão para consultar equipamentos.'),{status:502});
-    throw Object.assign(Error('Não foi possível consultar os equipamentos no RHiD (HTTP '+response.status+').'),{status:502});
+// The RHiD token is held in memory ONLY. Credentials remain in Render secrets.
+let loginCache=null,loginInFlight=null;
+function loginEndpoint(deviceUrl){
+  const url=new URL(endpoint(deviceUrl));
+  url.pathname='/v2/api.svc/login';
+  return url.toString();
+}
+function loginCacheKey(email,password,domain){
+  return require('node:crypto').createHash('sha256')
+    .update(email+'\0'+password+'\0'+domain).digest('hex');
+}
+function tokenExpiry(token){
+  // JWT expiration is only a cache hint; server verifies the real signature.
+  try{
+    const data=JSON.parse(Buffer.from(token.split('.')[1],'base64url').toString('utf8'));
+    const time=Number(data.exp)*1000;
+    if(Number.isFinite(time)&&time>Date.now())return Math.min(time-60_000,Date.now()+25*60_000);
+  }catch{}
+  return Date.now()+4*60_000;
+}
+function readTextLimited(response,limit){
+  const size=Number(response.headers?.get?.('content-length')||0);
+  if(size>limit)throw Error('Resposta da API RHiD acima do tamanho permitido.');
+  return response.text().then(s=>{
+    if(s.length>limit)throw Error('Resposta da API RHiD acima do tamanho permitido.');
+    return s;
+  });
+}
+function validText(value,max){
+  return typeof value==='string'&&value.length>0&&value.length<=max&&!/[\r\n\u0000]/.test(value);
+}
+async function obtainLoginToken({email,password,domain,url,fetcher,force=false}){
+  if(!validText(email,254)||!validText(password,300)||domain&&!validText(domain,160))
+    throw Error('Credenciais de integração RHiD inválidas.');
+  const key=loginCacheKey(email,password,domain||'');
+  if(!force&&loginCache?.key===key&&loginCache.validUntil>Date.now())return loginCache.token;
+  if(!force&&loginInFlight?.key===key)return loginInFlight.promise;
+  const task=(async()=>{
+    const response=await fetcher(loginEndpoint(url),{
+      method:'POST',redirect:'error',signal:AbortSignal.timeout(9000),
+      headers:{'Content-Type':'application/json',Accept:'application/json'},
+      body:JSON.stringify({email,password,...(domain?{domain}:{}),system:'rhid'})});
+    if(!response.ok)throw Error('O RHiD recusou o login da integração. Confira usuário, senha, domínio e permissão.');
+    const raw=await readTextLimited(response,100_000);
+    const data=JSON.parse(raw);
+    const result=data?.accessToken?data:data?.['application/json'];
+    const token=result?.accessToken;
+    if(!validText(token,8192)||/\s/.test(token))
+      throw Error('O RHiD não retornou um accessToken válido.');
+    if(result.expiredPassword===true)throw Error('A senha do RHiD está expirada; atualize-a antes de integrar.');
+    loginCache={key,token,validUntil:tokenExpiry(token)};
+    return token;
+  })();
+  loginInFlight={key,promise:task};
+  try{return await task;}finally{if(loginInFlight?.promise===task)loginInFlight=null;}
+}
+async function readDevices({
+  token=process.env.RHID_API_TOKEN,
+  email=process.env.RHID_LOGIN_EMAIL,
+  password=process.env.RHID_LOGIN_PASSWORD,
+  domain=process.env.RHID_LOGIN_DOMAIN||'',
+  url=process.env.RHID_DEVICE_URL||DEFAULT_URL,
+  fetcher=fetch
+}={}){
+  // Validate URL before sending credentials or tokens, including configured overrides.
+  const deviceUrl=endpoint(url);
+  const hasLogin=Boolean(email&&password);
+  if(!hasLogin&&(!token||typeof token!=='string'||!token.trim()))return {configured:false,devices:[]};
+  let accessToken;
+  if(hasLogin){
+    accessToken=await obtainLoginToken({email,password,domain,url:deviceUrl,fetcher});
+  }else{
+    if(!validText(token,8192)||/\s/.test(token))throw Error('Token RHiD inválido.');
+    accessToken=token.trim();
   }
-  // All device metadata must fit in a bounded response.
+  const getDevices=credential=>fetcher(deviceUrl,{
+    method:'GET',redirect:'error',headers:{Authorization:'Bearer '+credential,Accept:'application/json'},
+    signal:AbortSignal.timeout(9000)});
+  let response=await getDevices(accessToken);
+  if(response.status===401&&hasLogin){
+    // Token expired or rejected: renew via POST /login once, then retry GET /device.
+    if(loginCache?.token===accessToken)loginCache=null;
+    accessToken=await obtainLoginToken({email,password,domain,url:deviceUrl,fetcher,force:true});
+    response=await getDevices(accessToken);
+  }
+  if(!response.ok){
+    if(response.status===401||response.status===403)
+      throw Object.assign(Error('Token RHiD expirado ou usuário sem permissão para listar equipamentos.'),{status:502});
+    throw Object.assign(Error('Não foi possível consultar os equipamentos RHiD (HTTP '+response.status+').'),{status:502});
+  }
   const contentType=response.headers?.get?.('content-type')||'';
   if(!contentType.includes('json'))throw Error('Resposta da API RHiD não é JSON.');
-  const size=Number(response.headers?.get?.('content-length')||0);
-  if(size>2_000_000)throw Error('Resposta RHiD excede 2 MB.');
-  const payload=await response.text();
-  if(payload.length>2_000_000)throw Error('Resposta RHiD excede 2 MB.');
-  return {configured:true,devices:normalize(JSON.parse(payload))};
+  return {configured:true,devices:normalize(JSON.parse(await readTextLimited(response,2_000_000)))};
 }
+
 function associate(devices,equipments,companies){
   const bySerial=new Map();
   for(const e of equipments){
