@@ -309,6 +309,20 @@ function teamApi(options={}) {
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Lista de empresas restrita ao administrador.'});
         return send(res,200,{companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome||x.razaoSocial||'Empresa'}))});
       }
+      if(req.method==='POST'&&p==='companies'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode cadastrar empresas.'});
+        const b=await body(req),nome=typeof b.nome==='string'?b.nome.trim().replace(/\s+/g,' '):'';
+        if(nome.length<3||nome.length>180)return send(res,400,{error:'Informe o nome da empresa (3 a 180 caracteres).'});
+        if(data.workspace.clients.length>=1500)return send(res,409,{error:'Limite de empresas cadastradas atingido.'});
+        if(data.workspace.clients.some(x=>String(x.nome||x.razaoSocial||'').trim().toLocaleLowerCase('pt-BR')===nome.toLocaleLowerCase('pt-BR')))
+          return send(res,409,{error:'Essa empresa já está cadastrada.'});
+        const company={id:crypto.randomUUID(),nome,razaoSocial:nome};
+        data.workspace.clients.push(company);
+        data.workspace.revision++;
+        writeAudit('company-create',actor.id);
+        await persist();
+        return send(res,201,{company,revision:data.workspace.revision});
+      }
       if(req.method==='GET'&&p==='users'){
         const scope=scopeFor(actor);
         return send(res,200,{users:data.accounts.filter(x=>x.active!==false&&(scope===null||x.id===actor.id||
