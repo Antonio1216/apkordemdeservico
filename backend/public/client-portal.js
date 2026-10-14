@@ -15,7 +15,7 @@
  }
  async function load(){
   const data=await api('customer/info');
-  $('#company').textContent=data.empresa;
+  $('#company').textContent=data.terceirizada?data.empresa+' — Atendimento terceirizado por '+data.terceirizada:data.empresa;
   state.techs=data.tecnicos;
   const selector=$('#technician'),previous=selector.value;
   selector.replaceChildren(new Option('Selecione o técnico responsável',''));

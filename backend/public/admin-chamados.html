@@ -39,6 +39,11 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 .delegation-access{font-weight:700;color:#0d603f}
 .delegation-item.unassigned .delegation-access{color:#875119}
 .delegation-item button{margin-top:9px}
+.relationships{display:grid;gap:9px;margin-top:12px}
+.relationship{padding:12px;border:1px solid #c7d9e6;border-left:4px solid #126b9b;background:#f8fbfe;border-radius:8px}
+.relationship p{margin:3px 0}
+.subform{border-top:1px solid #d3e0eb;padding-top:18px;margin-top:20px}
+.form-hint{font-weight:normal;color:#52667b;font-size:.91rem}
 [hidden]{display:none!important}
 @media(max-width:500px){header{padding:18px 16px}main{padding:10px}.actions button{flex:1 1 auto}}
 </style>
@@ -79,6 +84,34 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 </div>
 <button type="submit">Cadastrar empresa</button>
 </form>
+<div class="subform" aria-labelledby="company-link-title">
+<h3 id="company-link-title">Cadastrar terceirizada e cliente final juntos</h3>
+<p class="hint">Exemplo: sua empresa presta serviço para uma terceirizada, que atende o cliente final. Você pode cadastrar as duas empresas agora ou vincular cadastros já existentes, sem duplicar empresas.</p>
+<form id="company-link-form">
+<div class="grid">
+<div>
+<label for="outsourcing-company">Empresa terceirizada
+<select id="outsourcing-company" name="terceirizadaId" required>
+<option value="__nova__">Cadastrar nova terceirizada</option>
+</select></label>
+<label for="outsourcing-new" id="outsourcing-new-label">Nome da nova terceirizada
+<input id="outsourcing-new" name="terceirizadaNome" maxlength="180" minlength="3" placeholder="Nome da empresa terceirizada" required></label>
+</div>
+<div>
+<label for="final-company">Cliente final atendido
+<select id="final-company" name="clienteFinalId" required>
+<option value="__nova__">Cadastrar novo cliente final</option>
+</select></label>
+<label for="final-new" id="final-new-label">Nome do novo cliente final
+<input id="final-new" name="clienteFinalNome" maxlength="180" minlength="3" placeholder="Nome do cliente final" required></label>
+</div>
+</div>
+<button type="submit">Salvar terceirizada + cliente final</button>
+</form>
+<p id="company-link-feedback" role="status" aria-live="polite" class="status"></p>
+<h3 id="company-link-list-title">Vínculos entre terceirizadas e clientes finais</h3>
+<div id="company-link-list" class="relationships" aria-labelledby="company-link-list-title" aria-live="polite">Carregando vínculos...</div>
+</div>
 </section>
 <section aria-labelledby="tech-title">
 <h2 id="tech-title">2. Técnicos da equipe</h2>

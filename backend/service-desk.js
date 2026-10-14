@@ -15,11 +15,14 @@ function serviceDesk({data,dbfile,persist,send,body,writeAudit,scopeFor}){
  const activeTech=(companyId)=>data.accounts.filter(x=>x.active!==false&&x.perfil==='Técnico'&&x.empresaId===companyId)
     .map(x=>({id:x.id,nome:x.nome}));
  const client=(id)=>data.workspace.clients.find(x=>x.id===id);
+ const companyName=x=>String(x?.nome||x?.razaoSocial||'Cliente');
+ const outsourcingCompany=id=>client(data.companyLinks?.[id]);
  const currentPortal=req=>{
   const t=req.headers['x-client-portal'];
   if(typeof t!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(t))return null;
   const hash=crypto.createHash('sha256').update(t).digest('hex');
   const item=Object.entries(data.clientPortals).find(([companyId,p])=>companyExists(companyId)&&
+    !Object.values(data.companyLinks||{}).includes(companyId)&&
     p.hash===hash&&p.expires>Date.now());
   return item?.[0]||null;
  };
@@ -68,7 +71,8 @@ function serviceDesk({data,dbfile,persist,send,body,writeAudit,scopeFor}){
   const companyId=currentPortal(req);
   if(!companyId)return send(res,401,{error:'Acesso do cliente inválido ou expirado.'});
   if(req.method==='GET'&&p==='customer/info')
-   return send(res,200,{empresa:txt(client(companyId)?.nome||client(companyId)?.razaoSocial||'Cliente',160),
+   return send(res,200,{empresa:txt(companyName(client(companyId)),160),
+    terceirizada:outsourcingCompany(companyId)?txt(companyName(outsourcingCompany(companyId)),160):null,
     tecnicos:activeTech(companyId)});
   if(req.method==='GET'&&p==='customer/tickets')
    return send(res,200,{tickets:data.tickets.filter(x=>x.empresaId===companyId).map(safeTicket).reverse()});
@@ -121,6 +125,8 @@ function serviceDesk({data,dbfile,persist,send,body,writeAudit,scopeFor}){
    if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode criar acesso de cliente.'});
    const b=await body(req);
    if(typeof b.empresaId!=='string'||b.empresaId.length>100||!companyExists(b.empresaId))return send(res,400,{error:'Selecione uma empresa cadastrada.'});
+   if(Object.values(data.companyLinks||{}).includes(b.empresaId))
+    return send(res,400,{error:'Selecione o cliente final. O link de chamados não pode pertencer à terceirizada.'});
    const token=crypto.randomBytes(32).toString('base64url');
    data.clientPortals[b.empresaId]={hash:crypto.createHash('sha256').update(token).digest('hex'),
       expires:Date.now()+90*24*3600*1000};
