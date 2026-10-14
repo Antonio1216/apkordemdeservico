@@ -109,7 +109,7 @@ function teamApi(options={}) {
   const stateFor=u=>{
     const scope=scopeFor(u),filter=a=>scope===null?a:a.filter(x=>belongsCompany(x,scope));
     return {revision:data.workspace.revision,
-      clients:can(u,'clientes')?filter(data.workspace.clients.filter(x=>scope===null||x.id===scope)):[],
+      clients:can(u,'clientes')?(scope===null?data.workspace.clients:data.workspace.clients.filter(x=>x.id===scope)):[],
       orders:can(u,'ordens')?filter(data.workspace.orders):[],
       drafts:can(u,'ordens')?filter(data.workspace.drafts):[],
       ...(can(u,'financeiro')?{finance:filter(data.workspace.finance)}:{})};
@@ -305,6 +305,10 @@ function teamApi(options={}) {
         return send(res,200,{enabled:true});
       }
       if(req.method==='GET'&&p==='me')return send(res,200,{account:safe(actor)});
+      if(req.method==='GET'&&p==='companies'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Lista de empresas restrita ao administrador.'});
+        return send(res,200,{companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome||x.razaoSocial||'Empresa'}))});
+      }
       if(req.method==='GET'&&p==='users'){
         const scope=scopeFor(actor);
         return send(res,200,{users:data.accounts.filter(x=>x.active!==false&&(scope===null||x.id===actor.id||
@@ -451,6 +455,19 @@ function teamApi(options={}) {
         if(oldRole&&oldRole!==perfil){a.permissions=defaults(a);a.rev++;delete a.emailReset;delete a.totp;pendingTotp.delete(a.id);}
         if(b.senha){a.salt=crypto.randomBytes(16).toString('hex');a.hash=passwordHash(b.senha,a.salt);a.rev++;}
         if(!existing)data.accounts.push(a);writeAudit(existing?'user-update':'user-create',actor.id);await persist();return send(res,200,{user:safe(a)});
+      }
+      const delegated=p.match(/^users\/([0-9a-f-]{36})\/company$/i);
+      if(req.method==='PUT'&&delegated){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Apenas o administrador pode delegar técnicos.'});
+        const target=data.accounts.find(x=>x.id===delegated[1]&&x.active!==false&&x.perfil==='Técnico');
+        if(!target)return send(res,404,{error:'Técnico não encontrado.'});
+        const b=await body(req);
+        if(typeof b.empresaId!=='string'||b.empresaId&& !companyIds().has(b.empresaId))
+          return send(res,400,{error:'Selecione uma empresa cadastrada, ou sem empresa para bloquear o técnico.'});
+        target.empresaId=b.empresaId;
+        target.rev++; // Redefinir acesso imediatamente.
+        writeAudit('technician-company-delegate',actor.id);
+        await persist();return send(res,200,{user:safe(target)});
       }
       const access=p.match(/^users\/([0-9a-f-]{36})\/permissions$/i);
       if(req.method==='PUT'&&access){
