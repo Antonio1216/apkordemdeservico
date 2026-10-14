@@ -22,6 +22,7 @@ function serviceDesk({data,dbfile,persist,send,body,writeAudit,scopeFor}){
   if(typeof t!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(t))return null;
   const hash=crypto.createHash('sha256').update(t).digest('hex');
   const item=Object.entries(data.clientPortals).find(([companyId,p])=>companyExists(companyId)&&
+    !Object.values(data.companyLinks||{}).includes(companyId)&&
     p.hash===hash&&p.expires>Date.now());
   return item?.[0]||null;
  };
