@@ -96,7 +96,7 @@ function serviceDesk({data,dbfile,persist,send,body,writeAudit,scopeFor}){
      await fs.promises.writeFile(target,e.bin,{flag:'wx',mode:0o600});saved.push(target);
     }
     const now=new Date().toISOString();
-    const ticket={id:ticketId,empresaId,tecnicoId:b.tecnicoId,tipo:txt(b.tipo,90),
+    const ticket={id:ticketId,empresaId:companyId,tecnicoId:b.tecnicoId,tipo:txt(b.tipo,90),
       equipamento:txt(b.equipamento,160),localEquipamento:txt(b.localEquipamento,220),
       descricao:txt(b.descricao,2400),localizacao:b.localizacao?
       {lat,lon,accuracy:Number.isFinite(accuracy)?Math.min(100000,Math.max(0,accuracy)):null}:null,
