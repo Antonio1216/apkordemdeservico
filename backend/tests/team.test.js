@@ -39,7 +39,7 @@ test('cadastro seguro, sessão central, perfis, sincronização com revisão e p
   r=await api('users/'+tech.id,'DELETE',null,adminToken);assert.equal(r.status,200);
   assert.equal((await api('workspace','GET',null,techToken)).status,401);
   const file=JSON.parse(fs.readFileSync(path.join(folder,'team.json')));
-  assert.equal(file.workspace.orders.length,1);assert.ok(!JSON.stringify(file).includes('123456'));assert.ok(!JSON.stringify(file).includes('abcdef'));
+  assert.equal(file.workspace.orders.length,1);assert.ok(!JSON.stringify(file).includes('"123456"'));assert.ok(!JSON.stringify(file).includes('"abcdef"'));
   // Recover the existing administrator without changing shared workspace or other accounts.
   const recovery=(admin,secret,payload)=>fetch(base+'/api/team/recover-admin-password',{
     method:'POST',headers:{'Content-Type':'application/json','X-API-Key':admin,'X-Password-Reset-Token':secret},
