@@ -80,6 +80,9 @@ function serviceDesk({data,dbfile,persist,send,body,writeAudit,scopeFor}){
   }
   if(req.method==='POST'&&p==='customer/tickets'){
    const b=await body(req);
+   const lastHour=Date.now()-60*60_000;
+   if(data.tickets.length>=10000||data.tickets.filter(x=>x.empresaId===companyId&&Date.parse(x.criadoEm)>lastHour).length>=15)
+     return send(res,429,{error:'Limite de chamados atingido. Aguarde um pouco ou fale com o suporte.'});
    if(!validText(b.tipo,90)||!validText(b.localEquipamento,220)||!validText(b.descricao,2400)||
       !validId(b.tecnicoId)||!activeTech(companyId).some(x=>x.id===b.tecnicoId)||
       !Array.isArray(b.evidencias)||b.evidencias.length>2)
