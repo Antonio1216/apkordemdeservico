@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const {calculateTravel} = require('./travel');
 const LicenseModel = require('./license-utils');
 const RHiDMonitor = require('./rhid-monitor');
+const Recovery = require('./recovery');
 
 function teamApi(options={}) {
   const KEY=String(options.key||'');
@@ -30,6 +31,32 @@ function teamApi(options={}) {
   // Coleção separada das OS: a atualização de uma OS não sobrescreve o catálogo.
   data.catalog||={revision:0,services:[],products:[],equipments:[]};
   for(const collection of ['services','products','equipments'])data.catalog[collection]||=[];
+  const pendingTotp=new Map(),emailRequests=new Map(),adminTotpAttempts=new Map();
+  const genericEmailMessage='Se o e-mail estiver cadastrado em uma conta comum e o envio estiver habilitado, você receberá um link em instantes.';
+  function allowedAttempt(map,key,max,windowMs){
+    const now=Date.now(),state=map.get(key);
+    if(map.size>5000)map.clear();
+    if(!state||state.until<=now){map.set(key,{n:1,until:now+windowMs});return true;}
+    if(state.n>=max)return false;
+    state.n++;return true;
+  }
+  function configuredPublicBase(){
+    const root=String(process.env.PUBLIC_BASE_URL||'').replace(/\/+$/,'');
+    if(!/^https:\/\/[a-z0-9.-]+(?::443)?$/i.test(root)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/.test(root))
+      throw Error('PUBLIC_BASE_URL inválida para recuperação.');
+    return root;
+  }
+  function validEmail(value){
+    return typeof value==='string'&&value.length<=254&&/^[a-z0-9._%+-]{1,64}@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(value);
+  }
+  function digestToken(value){return crypto.createHash('sha256').update(value).digest('hex');}
+  function passwordChange(account,senha){
+    const salt=crypto.randomBytes(16).toString('hex');
+    account.salt=salt;account.hash=passwordHash(senha,salt);
+    account.rev=(Number.isInteger(account.rev)?account.rev:0)+1;
+    delete account.emailReset;
+    tries.delete(account.login);
+  }
   let writeQueue=Promise.resolve();
   async function persist(){const snapshot=JSON.stringify(data);writeQueue=writeQueue.catch(()=>{}).then(async()=>{
     await fs.promises.mkdir(path.dirname(DBFILE),{recursive:true,mode:0o700});
@@ -52,7 +79,7 @@ function teamApi(options={}) {
     return Object.fromEntries(RIGHTS.map(k=>[k,typeof a.permissions?.[k]==='boolean'?a.permissions[k]:preset[k]]));
   };
   const can=(a,right)=>Boolean(a)&&(a.perfil==='Administrador'||permissions(a)[right]===true);
-  const safe=a=>({id:a.id,nome:a.nome,login:a.login,perfil:a.perfil,active:a.active!==false,permissions:permissions(a)});
+  const safe=a=>({id:a.id,nome:a.nome,login:a.login,email:a.email||'',perfil:a.perfil,active:a.active!==false,permissions:permissions(a)});
   function passwordHash(p,salt){return crypto.scryptSync(p,Buffer.from(salt,'hex'),64,{N:16384,r:8,p:1}).toString('hex');}
   function safeEq(a,b){const x=Buffer.from(a||'','hex'),y=Buffer.from(b||'','hex');return x.length===y.length && x.length>0 && crypto.timingSafeEqual(x,y);}
   function makeToken(acc){const payload=Buffer.from(JSON.stringify({uid:acc.id,rev:acc.rev,exp:Date.now()+8*3600*1000})).toString('base64url');return payload+'.'+crypto.createHmac('sha256',tokenKey).update(payload).digest('base64url');}
