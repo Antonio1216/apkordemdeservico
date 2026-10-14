@@ -117,7 +117,7 @@ function serviceDesk({data,dbfile,persist,send,body,writeAudit,scopeFor}){
   if(req.method==='POST'&&p==='customer-portals'){
    if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode criar acesso de cliente.'});
    const b=await body(req);
-   if(!validId(b.empresaId)||!companyExists(b.empresaId))return send(res,400,{error:'Selecione uma empresa cadastrada.'});
+   if(typeof b.empresaId!=='string'||b.empresaId.length>100||!companyExists(b.empresaId))return send(res,400,{error:'Selecione uma empresa cadastrada.'});
    const token=crypto.randomBytes(32).toString('base64url');
    data.clientPortals[b.empresaId]={hash:crypto.createHash('sha256').update(token).digest('hex'),
       expires:Date.now()+90*24*3600*1000};
