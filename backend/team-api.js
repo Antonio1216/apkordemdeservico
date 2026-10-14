@@ -5,6 +5,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const {calculateTravel} = require('./travel');
 const LicenseModel = require('./license-utils');
+const RHiDMonitor = require('./rhid-monitor');
 
 function teamApi(options={}) {
   const KEY=String(options.key||'');
@@ -21,6 +22,11 @@ function teamApi(options={}) {
   data.licenses||={revision:0,items:[]};
   if(!Array.isArray(data.licenses.items))throw Error('Base de licenças corrompida.');
   if(!Number.isInteger(data.licenses.revision))data.licenses.revision=0;
+  // Apenas histórico de alterações de conectividade; sem dados pessoais do RHiD.
+  data.rhidMonitor||={statuses:{},events:[]};
+  if(!Array.isArray(data.rhidMonitor.events))data.rhidMonitor.events=[];
+  if(!data.rhidMonitor.statuses||typeof data.rhidMonitor.statuses!=='object')data.rhidMonitor.statuses={};
+  let rhidCache=null,rhidInFlight=null;
   // Coleção separada das OS: a atualização de uma OS não sobrescreve o catálogo.
   data.catalog||={revision:0,services:[],products:[],equipments:[]};
   for(const collection of ['services','products','equipments'])data.catalog[collection]||=[];
@@ -36,10 +42,10 @@ function teamApi(options={}) {
   function validPassword(v){return typeof v==='string'&&v.length>=6&&v.length<=128;}
   // Regras individuais persistidas na conta, nunca no armazenamento do aparelho.
   // A falta de configuração mantém o comportamento padrão dos técnicos atuais.
-  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro','catalogo','licencas'];
+  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro','catalogo','licencas','rhid'];
   const defaults=a=>a.perfil==='Administrador'
     ? Object.fromEntries(RIGHTS.map(k=>[k,true]))
-    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false,catalogo:false,licencas:false};
+    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false,catalogo:false,licencas:false,rhid:false};
   const permissions=a=>{
     const preset=defaults(a);
     if(a.perfil==='Administrador')return preset;
@@ -164,6 +170,45 @@ function teamApi(options={}) {
       const actor=verifyToken(req);if(!actor)return send(res,401,{error:'Sessão inválida ou expirada. Entre novamente.'});
       if(req.method==='GET'&&p==='me')return send(res,200,{account:safe(actor)});
       if(req.method==='GET'&&p==='users')return send(res,200,{users:data.accounts.filter(x=>x.active!==false).map(safe)});
+      if(p==='rhid-monitor' && req.method==='GET'){
+        if(!can(actor,'rhid'))return send(res,403,{error:'Sem permissão para monitorar equipamentos RHiD.'});
+        if(!process.env.RHID_API_TOKEN?.trim()){
+          return send(res,200,{configured:false,devices:[],summary:{total:0,online:0,offline:0,unknown:0},
+            events:[],updatedAt:null,message:'Configure RHID_API_TOKEN no Render para ativar o monitoramento.'});
+        }
+        const load=async()=>{
+          const result=await RHiDMonitor.readDevices();
+          const sampledAt=new Date().toISOString();
+          const devices=RHiDMonitor.associate(result.devices,data.catalog.equipments,data.workspace.clients);
+          const current=Object.fromEntries(devices.map(d=>[d.id,{status:d.status,serie:d.serie}]));
+          const events=[];
+          for(const d of devices){
+            const previous=data.rhidMonitor.statuses[d.id];
+            if(previous&&previous.status!==d.status){
+              events.push({id:d.id,nome:d.nome,serie:d.serie,antes:previous.status,depois:d.status,em:sampledAt});
+            }
+          }
+          data.rhidMonitor.statuses=current;
+          if(events.length){
+            data.rhidMonitor.events.push(...events);
+            data.rhidMonitor.events=data.rhidMonitor.events.slice(-500);
+          }
+          await persist();
+          return {configured:true,devices,summary:RHiDMonitor.summary(devices),updatedAt:sampledAt};
+        };
+        // Reuse concurrent requests and throttle external calls to at most once a minute.
+        if(!rhidCache||Date.now()-rhidCache.at>60_000){
+          if(!rhidInFlight){
+            rhidInFlight=load().then(value=>{rhidCache={at:Date.now(),value};return value;})
+              .finally(()=>{rhidInFlight=null;});
+          }
+          try{await rhidInFlight;}catch(e){
+            // Neither token nor upstream body is ever emitted in HTTP response or logs.
+            return send(res,502,{error:'Não foi possível consultar o RHiD. Confira token, permissão de API e endereço da integração no Render.'});
+          }
+        }
+        return send(res,200,{...rhidCache.value,events:data.rhidMonitor.events.slice(-50).reverse()});
+      }
       if(p==='licenses'){
         if(!can(actor,'licencas'))return send(res,403,{error:'Sem permissão para gerenciar licenças de software.'});
         const safeLicenses=()=>({revision:data.licenses.revision,items:data.licenses.items,companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome||x.razaoSocial||'Empresa'}))});
