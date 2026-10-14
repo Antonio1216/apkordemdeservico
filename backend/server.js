@@ -44,6 +44,8 @@ const resetPage=fs.readFileSync(path.join(__dirname,'public','password-reset.htm
 const resetJs=fs.readFileSync(path.join(__dirname,'public','password-reset.js'),'utf8');
 const clientPortalPage=fs.readFileSync(path.join(__dirname,'public','client-portal.html'),'utf8');
 const clientPortalJs=fs.readFileSync(path.join(__dirname,'public','client-portal.js'),'utf8');
+const adminPortalPage=fs.readFileSync(path.join(__dirname,'public','admin-chamados.html'),'utf8');
+const adminPortalJs=fs.readFileSync(path.join(__dirname,'public','admin-chamados.js'),'utf8');
 const officialLogo=fs.readFileSync(path.join(__dirname,'public','brand','acr-logo.jpg'));
 function receiptByToken(token){if(!/^[A-Za-z0-9_-]{40,90}$/.test(token))return null;const receiptHash=hash(token);return Object.values(records).find(r=>r.pdfReceiptHash===receiptHash&&r.status==='signed')||null;}
 const attempts=new Map();
@@ -57,6 +59,8 @@ const server=http.createServer(async(req,res)=>{
     const p=url.pathname;
     if(p.startsWith('/api/team/'))return await team.handle(req,res,p);
     if(req.method==='GET'&&p==='/health')return json(res,200,{ok:true,service:'OS Pro assinatura remota'});
+    if(req.method==='GET'&&p==='/admin-chamados')return text(res,200,adminPortalPage,'text/html; charset=utf-8');
+    if(req.method==='GET'&&p==='/admin-chamados.js')return text(res,200,adminPortalJs,'application/javascript; charset=utf-8');
     if(req.method==='GET'&&p==='/client-portal')return text(res,200,clientPortalPage,'text/html; charset=utf-8');
     if(req.method==='GET'&&p==='/client-portal.js')return text(res,200,clientPortalJs,'application/javascript; charset=utf-8');
     if(req.method==='GET'&&p==='/password-reset')return text(res,200,resetPage,'text/html; charset=utf-8');
