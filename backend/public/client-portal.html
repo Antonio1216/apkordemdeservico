@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Chamados | ACR OS Pro</title>
+<style>
+:root{font:16px system-ui,sans-serif;color:#183147;color-scheme:light}
+*{box-sizing:border-box}body{margin:0;background:#eff4f9}header{background:#0d4372;color:#fff;padding:20px 16px}
+header h1{margin:0;font-size:1.5rem}main{width:min(100%,900px);margin:0 auto;padding:12px}
+section{background:#fff;padding:clamp(14px,3vw,24px);margin:14px 0;border-radius:12px;border:1px solid #d0dfed}
+h2{font-size:1.3rem}label{display:grid;gap:6px;margin:14px 0;font-weight:650}
+input,select,textarea{font:inherit;border:1px solid #8295aa;border-radius:8px;padding:12px;min-height:46px;width:100%}
+textarea{min-height:100px}button{font:inherit;min-height:46px;padding:10px 16px;background:#115d95;color:white;border:0;border-radius:8px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.6;cursor:wait}button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #dc8d0c;outline-offset:2px}
+.controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.notice{color:#37566d}
+#notice{font-weight:700;min-height:2em}.ticket{padding:14px;margin:10px 0;border:1px solid #d7dfe7;border-left:4px solid #145b91;border-radius:8px}
+.ticket h3{margin:0}.ticket p{margin:6px 0}.small{font-size:.875rem;color:#42586d}
+</style></head>
+<body><header><h1>ACR OS Pro — Abertura de chamados</h1><p id="company">Identificando empresa...</p></header>
+<main>
+<section aria-labelledby="open-heading">
+<h2 id="open-heading">Abrir chamado técnico</h2>
+<p>Informe o problema e selecione um técnico vinculado à sua empresa. A localização é opcional e só será coletada com sua autorização.</p>
+<form id="ticket-form">
+<label for="kind">Tipo de problema *</label>
+<select id="kind" name="tipo" required><option value="">Selecione...</option>
+<option>Elétrica</option><option>Software</option><option>Rede / Internet</option>
+<option>Computador / Impressora</option><option>Relógio de ponto</option>
+<option>Manutenção preventiva</option><option>Outro</option></select>
+<label for="equipment">Equipamento / identificação</label>
+<input id="equipment" name="equipamento" maxlength="160" placeholder="Ex.: REP entrada, notebook do setor">
+<label for="place">Onde está o equipamento? *</label>
+<input id="place" name="localEquipamento" required maxlength="220" placeholder="Ex.: recepção, 1º andar, sala 04">
+<label for="description">Descrição do problema *</label>
+<textarea id="description" name="descricao" required maxlength="2400" placeholder="Descreva o defeito, sintomas e o que já tentou."></textarea>
+<label for="technician">Técnico responsável *</label>
+<select id="technician" name="tecnicoId" required><option value="">Carregando técnicos...</option></select>
+<fieldset><legend>Localização e evidências (opcional)</legend>
+<div class="controls"><button type="button" id="capture-location">Autorizar geolocalização</button>
+<span id="location-state" role="status">Localização não enviada</span></div>
+<p class="small">O navegador pedirá sua permissão. Se não desejar informar a posição, poderá abrir o chamado normalmente.</p>
+<label for="evidence">Anexar até duas evidências (foto ou PDF, até 500 KB cada)</label>
+<input id="evidence" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" capture="environment" multiple>
+</fieldset>
+<button type="submit" id="submit-ticket">Abrir chamado</button>
+<p id="notice" role="status" aria-live="polite"></p>
+</form></section>
+<section aria-labelledby="list-heading">
+<div class="controls"><h2 id="list-heading">Acompanhar chamados</h2><button type="button" id="refresh">Atualizar</button></div>
+<div id="tickets" aria-live="polite">Carregando...</div>
+</section>
+</main>
+<script src="/client-portal.js" defer></script>
+</body></html>

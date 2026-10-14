@@ -6,6 +6,8 @@ const crypto = require('node:crypto');
 const {calculateTravel} = require('./travel');
 const LicenseModel = require('./license-utils');
 const RHiDMonitor = require('./rhid-monitor');
+const Recovery = require('./recovery');
+const {serviceDesk}=require('./service-desk');
 
 function teamApi(options={}) {
   const KEY=String(options.key||'');
@@ -30,6 +32,32 @@ function teamApi(options={}) {
   // Coleção separada das OS: a atualização de uma OS não sobrescreve o catálogo.
   data.catalog||={revision:0,services:[],products:[],equipments:[]};
   for(const collection of ['services','products','equipments'])data.catalog[collection]||=[];
+  const pendingTotp=new Map(),emailRequests=new Map(),adminTotpAttempts=new Map();
+  const genericEmailMessage='Se o e-mail estiver cadastrado em uma conta comum e o envio estiver habilitado, você receberá um link em instantes.';
+  function allowedAttempt(map,key,max,windowMs){
+    const now=Date.now(),state=map.get(key);
+    if(map.size>5000)map.clear();
+    if(!state||state.until<=now){map.set(key,{n:1,until:now+windowMs});return true;}
+    if(state.n>=max)return false;
+    state.n++;return true;
+  }
+  function configuredPublicBase(){
+    const root=String(process.env.PUBLIC_BASE_URL||'').replace(/\/+$/,'');
+    if(!/^https:\/\/[a-z0-9.-]+(?::443)?$/i.test(root)&&!/^http:\/\/(localhost|127\.0\.0\.1)(:\d{1,5})?$/.test(root))
+      throw Error('PUBLIC_BASE_URL inválida para recuperação.');
+    return root;
+  }
+  function validEmail(value){
+    return typeof value==='string'&&value.length<=254&&/^[a-z0-9._%+-]{1,64}@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(value);
+  }
+  function digestToken(value){return crypto.createHash('sha256').update(value).digest('hex');}
+  function passwordChange(account,senha){
+    const salt=crypto.randomBytes(16).toString('hex');
+    account.salt=salt;account.hash=passwordHash(senha,salt);
+    account.rev=(Number.isInteger(account.rev)?account.rev:0)+1;
+    delete account.emailReset;
+    tries.delete(account.login);
+  }
   let writeQueue=Promise.resolve();
   async function persist(){const snapshot=JSON.stringify(data);writeQueue=writeQueue.catch(()=>{}).then(async()=>{
     await fs.promises.mkdir(path.dirname(DBFILE),{recursive:true,mode:0o700});
@@ -42,17 +70,29 @@ function teamApi(options={}) {
   function validPassword(v){return typeof v==='string'&&v.length>=6&&v.length<=128;}
   // Regras individuais persistidas na conta, nunca no armazenamento do aparelho.
   // A falta de configuração mantém o comportamento padrão dos técnicos atuais.
-  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro','catalogo','licencas','rhid'];
+  const RIGHTS=['ordens','clientes','assinaturas','links','relatorios','financeiro','catalogo','licencas','rhid','chamados'];
   const defaults=a=>a.perfil==='Administrador'
     ? Object.fromEntries(RIGHTS.map(k=>[k,true]))
-    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false,catalogo:false,licencas:false,rhid:false};
+    : {ordens:true,clientes:true,assinaturas:true,links:true,relatorios:false,financeiro:false,catalogo:false,licencas:false,rhid:false,chamados:a.perfil==='Técnico'};
   const permissions=a=>{
     const preset=defaults(a);
     if(a.perfil==='Administrador')return preset;
     return Object.fromEntries(RIGHTS.map(k=>[k,typeof a.permissions?.[k]==='boolean'?a.permissions[k]:preset[k]]));
   };
   const can=(a,right)=>Boolean(a)&&(a.perfil==='Administrador'||permissions(a)[right]===true);
-  const safe=a=>({id:a.id,nome:a.nome,login:a.login,perfil:a.perfil,active:a.active!==false,permissions:permissions(a)});
+  const scopeFor=a=>a.perfil==='Técnico'&&typeof a.empresaId==='string' ? (a.empresaId||'__SEM_EMPRESA__') : null;
+  const isScoped=a=>scopeFor(a)!==null;
+  const companyIds=()=>new Set(data.workspace.clients.map(x=>x.id));
+  const belongsCompany=(record,id)=>{
+    const direct=[record?.empresaId,record?.clienteId,record?.clientId,record?.companyId].find(x=>typeof x==='string'&&x);
+    if(direct)return direct===id;
+    const label=[record?.cliente,record?.clienteNome,record?.clientName,record?.empresa].find(x=>typeof x==='string'&&x.trim());
+    if(!label)return false;
+    const matching=data.workspace.clients.filter(x=>[x.nome,x.razaoSocial].some(n=>typeof n==='string'&&n.trim().toLowerCase()===label.trim().toLowerCase()));
+    return matching.length===1&&matching[0].id===id;
+  };
+  const safe=a=>({id:a.id,nome:a.nome,login:a.login,email:a.email||'',perfil:a.perfil,active:a.active!==false,
+    empresaId:scopeFor(a)||'',permissions:permissions(a)});
   function passwordHash(p,salt){return crypto.scryptSync(p,Buffer.from(salt,'hex'),64,{N:16384,r:8,p:1}).toString('hex');}
   function safeEq(a,b){const x=Buffer.from(a||'','hex'),y=Buffer.from(b||'','hex');return x.length===y.length && x.length>0 && crypto.timingSafeEqual(x,y);}
   function makeToken(acc){const payload=Buffer.from(JSON.stringify({uid:acc.id,rev:acc.rev,exp:Date.now()+8*3600*1000})).toString('base64url');return payload+'.'+crypto.createHmac('sha256',tokenKey).update(payload).digest('base64url');}
@@ -66,12 +106,14 @@ function teamApi(options={}) {
   }
   function send(res,code,obj){res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(obj));}
   async function body(req){const chunks=[];let size=0;for await(const part of req){size+=part.length;if(size>2_000_000)throw {status:413,message:'Dados excedem 2 MB.'};chunks.push(part);}try{return JSON.parse(Buffer.concat(chunks).toString());}catch{throw {status:400,message:'JSON inválido.'};}}
-  const stateFor=u=>({revision:data.workspace.revision,
-    clients:can(u,'clientes')?data.workspace.clients:[],
-    orders:can(u,'ordens')?data.workspace.orders:[],
-    drafts:can(u,'ordens')?data.workspace.drafts:[],
-    ...(can(u,'financeiro')?{finance:data.workspace.finance}:{})
-  });
+  const stateFor=u=>{
+    const scope=scopeFor(u),filter=a=>scope===null?a:a.filter(x=>belongsCompany(x,scope));
+    return {revision:data.workspace.revision,
+      clients:can(u,'clientes')?(scope===null?data.workspace.clients:data.workspace.clients.filter(x=>x.id===scope)):[],
+      orders:can(u,'ordens')?filter(data.workspace.orders):[],
+      drafts:can(u,'ordens')?filter(data.workspace.drafts):[],
+      ...(can(u,'financeiro')?{finance:filter(data.workspace.finance)}:{})};
+  };
   function validCollection(arr,max){return Array.isArray(arr)&&arr.length<=max&&arr.every(x=>x&&typeof x==='object'&&!Array.isArray(x)&&typeof x.id==='string'&&x.id.length>=1&&x.id.length<=100);}
   const catalogText=(x,max=200)=>typeof x==='string'&&x.length<=max;
   const serialOK=s=>typeof s==='string'&&s.length<=120;
@@ -110,6 +152,7 @@ function teamApi(options={}) {
     }
     return null;
   }
+  const desk=serviceDesk({data,dbfile:DBFILE,persist,send,body,writeAudit,scopeFor});
   const tries=new Map();
   async function handle(req,res,pathname){
     if(!pathname.startsWith('/api/team/'))return false;
@@ -124,6 +167,64 @@ function teamApi(options={}) {
         if(!validLogin(login)||!validName(nome)||!validPassword(pwd))return send(res,400,{error:'Informe nome, usuário ou e-mail válido e senha com pelo menos 6 caracteres.'});
         const salt=crypto.randomBytes(16).toString('hex');const acc={id:crypto.randomUUID(),login,nome,perfil:'Administrador',active:true,rev:1,salt,hash:passwordHash(pwd,salt)};
         data.accounts.push(acc);writeAudit('bootstrap',acc.id);await persist();return send(res,201,{token:makeToken(acc),account:safe(acc)});
+      }
+      if(p.startsWith('customer/'))return desk.publicHandle(req,res,p);
+      // Public email recovery for non-admins only. Generic replies prevent account enumeration.
+      if(req.method==='POST'&&p==='password-reset/request'){
+        const b=await body(req),email=normalLogin(b.email);
+        const key=String(req.socket.remoteAddress||'')+'|'+email.slice(0,254);
+        if(!allowedAttempt(emailRequests,key,3,15*60_000))
+          return send(res,200,{message:genericEmailMessage});
+        const a=validEmail(email)?data.accounts.find(x=>x.active!==false&&x.perfil!=='Administrador'&&(x.email===email||(!x.email&&x.login===email))):null;
+        if(a&&process.env.RESEND_API_KEY&&process.env.PASSWORD_RESET_FROM_EMAIL){
+          const token=crypto.randomBytes(32).toString('base64url');
+          const previous=a.emailReset;
+          a.emailReset={hash:digestToken(token),expires:Date.now()+15*60_000};
+          try{
+            const link=configuredPublicBase()+'/password-reset#token='+encodeURIComponent(token);
+            await Recovery.sendResetMail({to:email,link});
+            writeAudit('user-password-reset-email-request',a.id);
+            await persist();
+          }catch{
+            if(previous)a.emailReset=previous;else delete a.emailReset;
+            // Never print a token, address or mail provider response to logs.
+          }
+        }
+        return send(res,200,{message:genericEmailMessage});
+      }
+      if(req.method==='POST'&&p==='password-reset/confirm'){
+        const b=await body(req),token=b.token,senha=b.senha;
+        if(!allowedAttempt(emailRequests,'confirm|'+String(req.socket.remoteAddress||''),15,15*60_000))
+          return send(res,429,{error:'Muitas tentativas. Aguarde 15 minutos.'});
+        if(typeof token!=='string'||!/^[A-Za-z0-9_-]{42,44}$/.test(token)||!validPassword(senha)||senha.length<12)
+          return send(res,400,{error:'Link inválido ou senha fora do padrão (mínimo de 12 caracteres).'});
+        const hashed=digestToken(token);
+        const acc=data.accounts.find(a=>a.perfil!=='Administrador'&&a.active!==false&&a.emailReset?.hash===hashed&&a.emailReset.expires>Date.now());
+        if(!acc)return send(res,400,{error:'Link inválido ou expirado. Solicite outro.'});
+        passwordChange(acc,senha);
+        writeAudit('user-password-reset-email-complete',acc.id);
+        await persist();
+        return send(res,200,{ok:true});
+      }
+      // A verified Microsoft Authenticator TOTP may recover ONLY an enrolled administrator.
+      if(req.method==='POST'&&p==='admin-totp/recover'){
+        const b=await body(req),login=normalLogin(b.login),senha=b.senha,code=b.code;
+        const key='totp|'+String(req.socket.remoteAddress||'')+'|'+login.slice(0,254);
+        if(!allowedAttempt(adminTotpAttempts,key,5,10*60_000))
+          return send(res,429,{error:'Muitas tentativas. Aguarde 10 minutos.'});
+        if(!validLogin(login)||!validPassword(senha)||senha.length<12||typeof code!=='string'||!/^\d{6}$/.test(code))
+          return send(res,400,{error:'Informe login, código de seis dígitos e nova senha de 12 a 128 caracteres.'});
+        const acc=data.accounts.find(a=>a.login===login&&a.perfil==='Administrador'&&a.active!==false&&a.totp?.secret);
+        if(!acc)return send(res,403,{error:'Recuperação por autenticador indisponível ou inválida.'});
+        let step=-1;
+        try{step=Recovery.verifyTotp(Recovery.decrypt(acc.totp.secret,KEY),code,Date.now(),acc.totp.lastStep??-1);}catch{}
+        if(step<0)return send(res,403,{error:'Código inválido ou já utilizado.'});
+        // Prevent TOTP replay even if concurrent requests arrive.
+        acc.totp.lastStep=step;
+        passwordChange(acc,senha);
+        writeAudit('admin-password-reset-totp',acc.id);
+        await persist();
+        return send(res,200,{ok:true});
       }
       // Recovery is disabled unless an independent, random reset token is configured on Render.
       // It requires BOTH the current ADMIN_KEY and that token. Tokens are single-use across restarts.
@@ -168,8 +269,55 @@ function teamApi(options={}) {
         tries.delete(login);return send(res,200,{token:makeToken(acc),account:safe(acc)});
       }
       const actor=verifyToken(req);if(!actor)return send(res,401,{error:'Sessão inválida ou expirada. Entre novamente.'});
+      // Enrollment is available only to a logged-in admin who re-enters their password.
+      if(p==='admin-totp/status'&&req.method==='GET'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Apenas o administrador pode configurar o autenticador.'});
+        return send(res,200,{enabled:Boolean(actor.totp?.secret)});
+      }
+      if(p==='admin-totp/setup'&&req.method==='POST'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Acesso restrito ao administrador.'});
+        if(actor.totp?.secret)return send(res,409,{error:'Autenticador já ativado. Para trocar, solicite um procedimento seguro ao suporte.'});
+        const b=await body(req);
+        const key='setup|'+String(req.socket.remoteAddress||'')+'|'+actor.id;
+        if(!allowedAttempt(adminTotpAttempts,key,5,10*60_000))return send(res,429,{error:'Muitas tentativas. Aguarde 10 minutos.'});
+        const check=passwordHash(String(b.senha||''),actor.salt);
+        if(!safeEq(check,actor.hash))return send(res,403,{error:'Senha do administrador incorreta.'});
+        const secret=Recovery.base32(crypto.randomBytes(20));
+        pendingTotp.set(actor.id,{secret,expires:Date.now()+10*60_000});
+        const issuer='ACR OS Pro';
+        const uri='otpauth://totp/'+encodeURIComponent(issuer+':'+actor.login)+'?secret='+secret+'&issuer='+encodeURIComponent(issuer)+'&algorithm=SHA1&digits=6&period=30';
+        return send(res,200,{secret,otpauth:uri,expiresInSeconds:600});
+      }
+      if(p==='admin-totp/confirm'&&req.method==='POST'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Acesso restrito ao administrador.'});
+        if(actor.totp?.secret)return send(res,409,{error:'Autenticador já ativado.'});
+        const key='activate|'+String(req.socket.remoteAddress||'')+'|'+actor.id;
+        if(!allowedAttempt(adminTotpAttempts,key,5,10*60_000))return send(res,429,{error:'Muitas tentativas. Aguarde 10 minutos.'});
+        const pending=pendingTotp.get(actor.id);
+        if(!pending||pending.expires<Date.now())return send(res,400,{error:'Configuração expirada. Inicie novamente.'});
+        const b=await body(req);
+        const used=Recovery.verifyTotp(pending.secret,b.code);
+        if(used<0)return send(res,403,{error:'Código do autenticador inválido.'});
+        actor.totp={secret:Recovery.encrypt(pending.secret,KEY),lastStep:used};
+        pendingTotp.delete(actor.id);
+        writeAudit('admin-totp-enable',actor.id);
+        await persist();
+        return send(res,200,{enabled:true});
+      }
       if(req.method==='GET'&&p==='me')return send(res,200,{account:safe(actor)});
-      if(req.method==='GET'&&p==='users')return send(res,200,{users:data.accounts.filter(x=>x.active!==false).map(safe)});
+      if(req.method==='GET'&&p==='companies'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Lista de empresas restrita ao administrador.'});
+        return send(res,200,{companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome||x.razaoSocial||'Empresa'}))});
+      }
+      if(req.method==='GET'&&p==='users'){
+        const scope=scopeFor(actor);
+        return send(res,200,{users:data.accounts.filter(x=>x.active!==false&&(scope===null||x.id===actor.id||
+          x.perfil==='Técnico'&&x.empresaId===scope)).map(safe)});
+      }
+      if(p==='tickets'||p.startsWith('tickets/')||p==='customer-portals'){
+        if(actor.perfil!=='Administrador'&&actor.perfil!=='Técnico')return send(res,403,{error:'Chamados disponíveis apenas para técnicos e administradores.'});
+        return desk.authenticatedHandle(req,res,p,actor);
+      }
       if(p==='rhid-monitor' && req.method==='GET'){
         if(!can(actor,'rhid'))return send(res,403,{error:'Sem permissão para monitorar equipamentos RHiD.'});
         if(!process.env.RHID_API_TOKEN?.trim()&&!(process.env.RHID_LOGIN_EMAIL?.trim()&&process.env.RHID_LOGIN_PASSWORD)){
@@ -207,13 +355,21 @@ function teamApi(options={}) {
             return send(res,502,{error:'Não foi possível consultar o RHiD. Confira token, permissão de API e endereço da integração no Render.'});
           }
         }
-        return send(res,200,{...rhidCache.value,events:data.rhidMonitor.events.slice(-50).reverse()});
+        const sc=scopeFor(actor);
+        const selected=sc===null?rhidCache.value.devices:rhidCache.value.devices.filter(x=>x.empresaId===sc);
+        return send(res,200,{...rhidCache.value,devices:selected,summary:RHiDMonitor.summary(selected),
+          events:sc===null?data.rhidMonitor.events.slice(-50).reverse():[]});
       }
       if(p==='licenses'){
         if(!can(actor,'licencas'))return send(res,403,{error:'Sem permissão para gerenciar licenças de software.'});
-        const safeLicenses=()=>({revision:data.licenses.revision,items:data.licenses.items,companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome||x.razaoSocial||'Empresa'}))});
+        const safeLicenses=()=>{
+          const scope=scopeFor(actor);
+          return {revision:data.licenses.revision,items:scope===null?data.licenses.items:data.licenses.items.filter(x=>x.empresaId===scope),
+            companies:data.workspace.clients.filter(x=>scope===null||x.id===scope).map(x=>({id:x.id,nome:x.nome||x.razaoSocial||'Empresa'}))};
+        };
         if(req.method==='GET')return send(res,200,safeLicenses());
         if(req.method==='PUT'){
+          if(isScoped(actor))return send(res,403,{error:'Técnico delegado não pode modificar licenças de outras empresas.'});
           const b=await body(req);
           if(!b||!Number.isInteger(b.revision)||!Array.isArray(b.items)||b.items.length>2500)
             return send(res,400,{error:'Lista de licenças inválida (até 2.500 itens).'});
@@ -235,8 +391,14 @@ function teamApi(options={}) {
       }
       if(p==='catalog'){
         if(!can(actor,'catalogo'))return send(res,403,{error:'Sem permissão para o catálogo e equipamentos.'});
-        if(req.method==='GET')return send(res,200,{...data.catalog,companies:data.workspace.clients.map(x=>({id:x.id,nome:x.nome}))});
+        if(req.method==='GET'){
+          const scope=scopeFor(actor),filter=a=>scope===null?a:a.filter(x=>x.empresaId===scope);
+          return send(res,200,{revision:data.catalog.revision,
+            services:filter(data.catalog.services),products:filter(data.catalog.products),equipments:filter(data.catalog.equipments),
+            companies:data.workspace.clients.filter(x=>scope===null||x.id===scope).map(x=>({id:x.id,nome:x.nome}))});
+        }
         if(req.method==='PUT'){
+          if(isScoped(actor))return send(res,403,{error:'Técnico delegado não pode alterar o catálogo corporativo.'});
           const b=await body(req),err=validateCatalog(b);
           if(err)return send(res,400,{error:err});
           if(b.revision!==data.catalog.revision)return send(res,409,{error:'Catálogo alterado em outro aparelho. Atualize antes de salvar.',revision:data.catalog.revision});
@@ -251,6 +413,31 @@ function teamApi(options={}) {
         if(b.revision!==data.workspace.revision)return send(res,409,{error:'Outro aparelho atualizou os dados. Sincronize para evitar perda de informações.',revision:data.workspace.revision});
         if(!validCollection(b.clients,1500)||!validCollection(b.orders,3500)||!validCollection(b.drafts,250))return send(res,400,{error:'Lista inválida de clientes ou ordens.'});
         if(can(actor,'financeiro')&&!validCollection(b.finance,3500))return send(res,400,{error:'Lista financeira inválida.'});
+        // Empresa delegada: validar tudo e fazer merge apenas da sua empresa.
+        // Nunca permitir que um PUT parcial apague dados de outras empresas.
+        if(isScoped(actor)){
+          const company=scopeFor(actor);
+          if(!companyIds().has(company))return send(res,403,{error:'Seu perfil ainda não possui uma empresa válida atribuída.'});
+          const ownClients=can(actor,'clientes')?data.workspace.clients.filter(x=>x.id===company):[];
+          if(b.clients.length!==ownClients.length||b.clients.some(x=>!ownClients.some(y=>y.id===x.id&&JSON.stringify(y)===JSON.stringify(x))))
+            return send(res,403,{error:'Técnico não pode alterar o cadastro das empresas.'});
+          if(!can(actor,'ordens')&&(b.orders.length||b.drafts.length))
+            return send(res,403,{error:'Sem permissão para ordens de serviço.'});
+          if(b.orders.some(x=>!belongsCompany(x,company))||b.drafts.some(x=>!belongsCompany(x,company)))
+            return send(res,403,{error:'Ordem ou rascunho de outra empresa, ou sem empresa identificada.'});
+          if(Array.isArray(b.finance)&&b.finance.length)
+            return send(res,403,{error:'Lançamentos financeiros são restritos à gestão administrativa neste perfil.'});
+          const oldOrders=data.workspace.orders.filter(x=>belongsCompany(x,company));
+          if(oldOrders.some(old=>!b.orders.some(x=>x.id===old.id&&JSON.stringify(x)===JSON.stringify(old))))
+            return send(res,403,{error:'Técnicos não podem excluir nem alterar OS finalizadas.'});
+          const nextOrders=data.workspace.orders.filter(x=>!belongsCompany(x,company)).concat(b.orders);
+          const nextDrafts=data.workspace.drafts.filter(x=>!belongsCompany(x,company)).concat(b.drafts);
+          const seen=new Set();
+          if(nextOrders.some(x=>seen.has(x.id)||!seen.add(x.id)))return send(res,409,{error:'Número interno da ordem duplicado.'});
+          data.workspace={...data.workspace,revision:data.workspace.revision+1,orders:nextOrders,drafts:nextDrafts};
+          writeAudit('workspace-update-company',actor.id);
+          await persist();return send(res,200,stateFor(actor));
+        }
         if(can(actor,'financeiro')){
           for(const expense of b.finance){
             if(expense.categoria!=='viagem')continue;
@@ -303,10 +490,26 @@ function teamApi(options={}) {
         if((!existing||b.senha) && !validPassword(b.senha))return send(res,400,{error:'Senha deve ter pelo menos 6 caracteres.'});
         if(existing?.id===actor.id&&perfil!=='Administrador')return send(res,403,{error:'Você não pode remover seu próprio perfil administrador.'});
         if(existing?.perfil==='Administrador'&&perfil!=='Administrador'&&!data.accounts.some(x=>x.id!==existing.id&&x.perfil==='Administrador'&&x.active!==false))return send(res,403,{error:'Mantenha ao menos um administrador.'});
-        const a=existing||{id:crypto.randomUUID(),rev:1,active:true};const oldRole=a.perfil;Object.assign(a,{login,nome,perfil});
-        if(oldRole&&oldRole!==perfil){a.permissions=defaults(a);a.rev++;}
+        const a=existing||{id:crypto.randomUUID(),rev:1,active:true};const oldRole=a.perfil;
+        const email=b.email===undefined?(existing?.email|| (validEmail(login)?login:'')):normalLogin(b.email);
+        if(email&&!validEmail(email))return send(res,400,{error:'E-mail de recuperação inválido.'});
+        Object.assign(a,{login,nome,perfil,email});
+        if(oldRole&&oldRole!==perfil){a.permissions=defaults(a);a.rev++;delete a.emailReset;delete a.totp;pendingTotp.delete(a.id);}
         if(b.senha){a.salt=crypto.randomBytes(16).toString('hex');a.hash=passwordHash(b.senha,a.salt);a.rev++;}
         if(!existing)data.accounts.push(a);writeAudit(existing?'user-update':'user-create',actor.id);await persist();return send(res,200,{user:safe(a)});
+      }
+      const delegated=p.match(/^users\/([0-9a-f-]{36})\/company$/i);
+      if(req.method==='PUT'&&delegated){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Apenas o administrador pode delegar técnicos.'});
+        const target=data.accounts.find(x=>x.id===delegated[1]&&x.active!==false&&x.perfil==='Técnico');
+        if(!target)return send(res,404,{error:'Técnico não encontrado.'});
+        const b=await body(req);
+        if(typeof b.empresaId!=='string'||b.empresaId&& !companyIds().has(b.empresaId))
+          return send(res,400,{error:'Selecione uma empresa cadastrada, ou sem empresa para bloquear o técnico.'});
+        target.empresaId=b.empresaId;
+        target.rev++; // Redefinir acesso imediatamente.
+        writeAudit('technician-company-delegate',actor.id);
+        await persist();return send(res,200,{user:safe(target)});
       }
       const access=p.match(/^users\/([0-9a-f-]{36})\/permissions$/i);
       if(req.method==='PUT'&&access){
@@ -334,6 +537,6 @@ function teamApi(options={}) {
       return send(res,404,{error:'Rota não encontrada.'});
     }catch(e){console.error('Equipe API',e.message);return send(res,e.status||500,{error:e.status?e.message:'Erro interno no servidor.'});}
   }
-  return {handle,getActor:verifyToken,hasPermission:(req,right)=>can(verifyToken(req),right)};
+  return {handle,getActor:verifyToken,hasPermission:(req,right)=>{const actor=verifyToken(req);return can(actor,right)&&(!isScoped(actor)||!['links','assinaturas'].includes(right));}};
 }
 module.exports={teamApi};
