@@ -8,6 +8,7 @@ const LicenseModel = require('./license-utils');
 const RHiDMonitor = require('./rhid-monitor');
 const Recovery = require('./recovery');
 const {serviceDesk}=require('./service-desk');
+const Cnpj=require('./cnpj-lookup');
 
 function teamApi(options={}) {
   const KEY=String(options.key||'');
@@ -21,6 +22,10 @@ function teamApi(options={}) {
   for(const type of ['clients','orders','drafts','finance'])data.workspace[type]||=[];
   // Relacionamentos preservados separadamente para não se perderem na sincronização de OS do APK.
   data.companyLinks||={};
+  // Dados do CNPJ separados: sincronizações antigas do APK não os sobrescrevem.
+  data.companyDetails||={};
+  if(!data.companyDetails||typeof data.companyDetails!=='object'||Array.isArray(data.companyDetails))
+    throw Error('Detalhes de empresas inválidos.');
   if(typeof data.companyLinks!=='object'||Array.isArray(data.companyLinks))throw Error('Vínculos de empresas inválidos.');
   data.audit||=[];
   // Licenças possuem revisão independente: atualizações das OS não sobrescrevem este cadastro.
@@ -90,9 +95,16 @@ function teamApi(options={}) {
   const companyName=x=>String(x?.nome||x?.razaoSocial||'Empresa');
   const normCompany=x=>String(x||'').trim().replace(/\s+/g,' ');
   const isContractor=id=>Object.values(data.companyLinks).includes(id);
+  const cnpjCache=new Map(),cnpjRequests=new Map();
+  const detailFor=company=>data.companyDetails[company.id]||{};
+  const uniqueCnpj=(cnpj,except='')=>!cnpj||!data.workspace.clients.some(c=>c.id!==except&&
+    Cnpj.normalizeCnpj(detailFor(c).cnpj||c.cnpj||'')===cnpj);
+  const uniqueCompanyName=(nome,except='')=>!data.workspace.clients.some(c=>c.id!==except&&
+    companyName(c).trim().toLocaleLowerCase('pt-BR')===nome.trim().toLocaleLowerCase('pt-BR'));
   function safeCompany(c){
     const terceirizadaId=data.companyLinks[c.id]||'';
-    return {id:c.id,nome:companyName(c),
+    return {id:c.id,nome:companyName(c),razaoSocial:detailFor(c).razaoSocial||c.razaoSocial||companyName(c),
+      ...{...detailFor(c),cnpj:detailFor(c).cnpj||Cnpj.normalizeCnpj(c.cnpj||'')},
       tipoEmpresa:terceirizadaId?'cliente-final':isContractor(c.id)?'terceirizada':'independente',
       terceirizadaId,
       terceirizadaNome:terceirizadaId?companyName(companyById(terceirizadaId)):''};
@@ -323,24 +335,59 @@ function teamApi(options={}) {
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Lista de empresas restrita ao administrador.'});
         return send(res,200,{companies:data.workspace.clients.map(safeCompany)});
       }
+      const cnpjRoute=p.match(/^companies\/cnpj\/([0-9A-Za-z.-]{14,20})$/);
+      if(req.method==='GET'&&cnpjRoute){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador consulta CNPJ.'});
+        const cnpj=Cnpj.normalizeCnpj(cnpjRoute[1]);
+        if(!Cnpj.validCnpj(cnpj))return send(res,400,{error:'CNPJ inválido. Confira o número informado.'});
+        if(!allowedAttempt(cnpjRequests,actor.id,30,10*60_000))
+          return send(res,429,{error:'Limite de consultas atingido. Aguarde alguns minutos.'});
+        const hit=cnpjCache.get(cnpj);
+        if(hit&&hit.expires>Date.now())return send(res,200,{empresa:hit.empresa,fonte:'BrasilAPI',cache:true});
+        const empresa=await Cnpj.lookupCnpj(cnpj,options.cnpjFetch||globalThis.fetch);
+        if(cnpjCache.size>=300)cnpjCache.clear();
+        cnpjCache.set(cnpj,{empresa,expires:Date.now()+30*60_000});
+        return send(res,200,{empresa,fonte:'BrasilAPI',cache:false});
+      }
       if(req.method==='POST'&&p==='companies'){
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode cadastrar empresas.'});
-        const b=await body(req),nome=typeof b.nome==='string'?b.nome.trim().replace(/\s+/g,' '):'';
+        const b=await body(req),nome=normCompany(b.nome);
         if(nome.length<3||nome.length>180)return send(res,400,{error:'Informe o nome da empresa (3 a 180 caracteres).'});
         if(data.workspace.clients.length>=1500)return send(res,409,{error:'Limite de empresas cadastradas atingido.'});
-        if(data.workspace.clients.some(x=>String(x.nome||x.razaoSocial||'').trim().toLocaleLowerCase('pt-BR')===nome.toLocaleLowerCase('pt-BR')))
-          return send(res,409,{error:'Essa empresa já está cadastrada.'});
-        const company={id:crypto.randomUUID(),nome,razaoSocial:nome};
+        if(!uniqueCompanyName(nome))return send(res,409,{error:'Essa empresa já está cadastrada.'});
+        const details=Cnpj.details(b);
+        if(!uniqueCnpj(details.cnpj))return send(res,409,{error:'CNPJ já cadastrado em outra empresa.'});
+        const company={id:crypto.randomUUID(),nome,razaoSocial:details.razaoSocial||nome};
         data.workspace.clients.push(company);
+        data.companyDetails[company.id]=details;
         data.workspace.revision++;
         writeAudit('company-create',actor.id);
         await persist();
-        return send(res,201,{company,revision:data.workspace.revision});
+        return send(res,201,{company:safeCompany(company),revision:data.workspace.revision});
+      }
+      const editCompany=p.match(/^companies\/([A-Za-z0-9_-]{1,100})$/);
+      if(req.method==='PATCH'&&editCompany){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode editar empresas.'});
+        const company=companyById(editCompany[1]);
+        if(!company)return send(res,404,{error:'Empresa não encontrada.'});
+        const b=await body(req),nome=normCompany(b.nome);
+        if(nome.length<3||nome.length>180)return send(res,400,{error:'Informe o nome da empresa (3 a 180 caracteres).'});
+        if(!uniqueCompanyName(nome,company.id))return send(res,409,{error:'Já existe outra empresa com esse nome.'});
+        const details={...detailFor(company),...Cnpj.details(b)};
+        if(!uniqueCnpj(details.cnpj,company.id))
+          return send(res,409,{error:'Este CNPJ já pertence a outra empresa cadastrada.'});
+        company.nome=nome;
+        company.razaoSocial=details.razaoSocial||nome;
+        data.companyDetails[company.id]=details;
+        data.workspace.revision++;
+        writeAudit('company-edit',actor.id);
+        await persist();
+        return send(res,200,{company:safeCompany(company),revision:data.workspace.revision});
       }
       if(req.method==='POST'&&p==='companies/link'){
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador vincula terceirizadas e clientes finais.'});
         const b=await body(req);
-        const resolve=(id,name,label)=>{
+        const resolve=(id,name,label,inputDetails={})=>{
           if(id!==undefined&&id!==null&&id!==''){
             if(typeof id!=='string'||id.length>100)throw {status:400,message:'ID inválido para '+label+'.'};
             const company=companyById(id);
@@ -351,10 +398,16 @@ function teamApi(options={}) {
           if(nome.length<3||nome.length>180)throw {status:400,message:'Informe '+label+' (3 a 180 caracteres).'};
           if(data.workspace.clients.some(x=>companyName(x).toLocaleLowerCase('pt-BR')===nome.toLocaleLowerCase('pt-BR')))
             throw {status:409,message:label+' já está cadastrada. Selecione o cadastro existente.'};
-          return {company:{id:crypto.randomUUID(),nome,razaoSocial:nome},create:true};
+          const details=Cnpj.details(inputDetails);
+          if(!uniqueCnpj(details.cnpj))throw {status:409,message:'Este CNPJ já pertence a outra empresa cadastrada.'};
+          return {company:{id:crypto.randomUUID(),nome,razaoSocial:details.razaoSocial||nome},details,create:true};
         };
-        const outsourcing=resolve(b.terceirizadaId,b.terceirizadaNome,'a empresa terceirizada');
-        const final=resolve(b.clienteFinalId,b.clienteFinalNome,'o cliente final');
+        const outsourcing=resolve(b.terceirizadaId,b.terceirizadaNome,'a empresa terceirizada',
+          {...(b.terceirizadaDetalhes&&typeof b.terceirizadaDetalhes==='object'&&!Array.isArray(b.terceirizadaDetalhes)?b.terceirizadaDetalhes:{}),
+            cnpj:b.terceirizadaCnpj,razaoSocial:b.terceirizadaRazaoSocial||b.terceirizadaDetalhes?.razaoSocial});
+        const final=resolve(b.clienteFinalId,b.clienteFinalNome,'o cliente final',
+          {...(b.clienteFinalDetalhes&&typeof b.clienteFinalDetalhes==='object'&&!Array.isArray(b.clienteFinalDetalhes)?b.clienteFinalDetalhes:{}),
+            cnpj:b.clienteFinalCnpj,razaoSocial:b.clienteFinalRazaoSocial||b.clienteFinalDetalhes?.razaoSocial});
         if(outsourcing.company.id===final.company.id||
            companyName(outsourcing.company).toLocaleLowerCase('pt-BR')===companyName(final.company).toLocaleLowerCase('pt-BR'))
           return send(res,400,{error:'Terceirizada e cliente final devem ser empresas diferentes.'});
@@ -362,11 +415,19 @@ function teamApi(options={}) {
           return send(res,409,{error:'Esta terceirizada já é cliente final de outra empresa. Cadastre outra empresa terceirizada.'});
         if(isContractor(final.company.id))
           return send(res,409,{error:'Este cliente final já atua como terceirizada de outros clientes. Selecione outro cliente.'});
+        if(outsourcing.create&&final.create&&outsourcing.details.cnpj&&outsourcing.details.cnpj===final.details.cnpj)
+          return send(res,409,{error:'Terceirizada e cliente final não podem ter o mesmo CNPJ.'});
         const creates=Number(Boolean(outsourcing.create))+Number(Boolean(final.create));
         if(data.workspace.clients.length+creates>1500)
           return send(res,409,{error:'Limite de empresas cadastradas atingido.'});
-        if(outsourcing.create)data.workspace.clients.push(outsourcing.company);
-        if(final.create)data.workspace.clients.push(final.company);
+        if(outsourcing.create){
+          data.workspace.clients.push(outsourcing.company);
+          data.companyDetails[outsourcing.company.id]=outsourcing.details;
+        }
+        if(final.create){
+          data.workspace.clients.push(final.company);
+          data.companyDetails[final.company.id]=final.details;
+        }
         data.companyLinks[final.company.id]=outsourcing.company.id;
         // A terceirizada não é o cliente final; invalidar antigos links diretos de atendimento.
         if(data.clientPortals)delete data.clientPortals[outsourcing.company.id];

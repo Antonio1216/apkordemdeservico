@@ -44,6 +44,14 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 .relationship p{margin:3px 0}
 .subform{border-top:1px solid #d3e0eb;padding-top:18px;margin-top:20px}
 .form-hint{font-weight:normal;color:#52667b;font-size:.91rem}
+.company-list{display:grid;gap:10px;margin:12px 0}
+.company-item{border:1px solid #c6d8e7;border-left:4px solid #09639b;background:#f9fcfe;border-radius:9px;padding:14px}
+.company-item h4{margin:0;font-size:1rem}
+.company-item p{margin:4px 0;overflow-wrap:anywhere}
+.company-item button{margin-top:7px}
+.company-status{font-weight:700}
+.form-subtitle{font-size:1rem;color:#1a5079;margin:13px 0 0}
+.lookup-status{min-height:1.5em;color:#20517a;font-size:.94rem;font-weight:650}
 [hidden]{display:none!important}
 @media(max-width:500px){header{padding:18px 16px}main{padding:10px}.actions button{flex:1 1 auto}}
 </style>
@@ -78,12 +86,49 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 <h2 id="company-title">1. Empresas cadastradas</h2>
 <p id="companies-count" class="hint">Carregando...</p>
 <form id="new-company-form">
+<p id="company-form-title" class="form-subtitle">Cadastrar nova empresa</p>
 <div class="grid">
-<label for="company-name">Cadastrar empresa, se ainda não existir
-<input id="company-name" name="nome" maxlength="180" autocomplete="organization" placeholder="Nome da empresa" required></label>
+<div>
+<label for="company-cnpj">CNPJ (opcional)
+<input id="company-cnpj" name="cnpj" inputmode="text" maxlength="20" placeholder="00.000.000/0000-00" autocomplete="off"></label>
+<button id="lookup-company" type="button" class="secondary">Consultar CNPJ</button>
+<p id="lookup-company-status" class="lookup-status" role="status" aria-live="polite"></p>
 </div>
-<button type="submit">Cadastrar empresa</button>
+<label for="company-name">Nome para identificação da empresa
+<input id="company-name" name="nome" maxlength="180" autocomplete="organization" placeholder="Nome da empresa" required></label>
+<label for="company-razao">Razão social
+<input id="company-razao" name="razaoSocial" maxlength="180"></label>
+<label for="company-fantasia">Nome fantasia
+<input id="company-fantasia" name="nomeFantasia" maxlength="180"></label>
+<label for="company-logradouro">Logradouro
+<input id="company-logradouro" name="logradouro" maxlength="160"></label>
+<label for="company-numero">Número
+<input id="company-numero" name="numero" maxlength="30"></label>
+<label for="company-bairro">Bairro
+<input id="company-bairro" name="bairro" maxlength="120"></label>
+<label for="company-cidade">Cidade
+<input id="company-cidade" name="cidade" maxlength="120"></label>
+<label for="company-uf">UF
+<input id="company-uf" name="uf" maxlength="2" placeholder="SP"></label>
+<label for="company-cep">CEP
+<input id="company-cep" name="cep" maxlength="9" placeholder="00000-000"></label>
+<label for="company-telefone">Telefone
+<input id="company-telefone" name="telefone" maxlength="24" type="tel"></label>
+<label for="company-email">E-mail
+<input id="company-email" name="email" maxlength="254" type="email"></label>
+</div>
+<div class="actions">
+<button id="save-company" type="submit">Cadastrar empresa</button>
+<button id="cancel-company-edit" type="button" class="secondary" hidden>Cancelar edição</button>
+</div>
+<p id="company-feedback" role="status" aria-live="polite" class="status"></p>
 </form>
+<div class="subform">
+<h3 id="companies-list-title">Lista de empresas cadastradas</h3>
+<label for="company-filter">Buscar empresa por nome ou CNPJ
+<input id="company-filter" type="search" placeholder="Digite o nome ou CNPJ"></label>
+<div id="company-list" class="company-list" aria-labelledby="companies-list-title" aria-live="polite">Carregando empresas...</div>
+</div>
 <div class="subform" aria-labelledby="company-link-title">
 <h3 id="company-link-title">Cadastrar terceirizada e cliente final juntos</h3>
 <p class="hint">Exemplo: sua empresa presta serviço para uma terceirizada, que atende o cliente final. Você pode cadastrar as duas empresas agora ou vincular cadastros já existentes, sem duplicar empresas.</p>
@@ -94,16 +139,28 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 <select id="outsourcing-company" name="terceirizadaId" required>
 <option value="__nova__">Cadastrar nova terceirizada</option>
 </select></label>
+<div id="outsourcing-new-fields">
+<label for="outsourcing-cnpj">CNPJ da terceirizada
+<input id="outsourcing-cnpj" name="terceirizadaCnpj" maxlength="20" placeholder="00.000.000/0000-00"></label>
+<button id="lookup-outsourcing" class="secondary" type="button">Consultar CNPJ da terceirizada</button>
+<p id="lookup-outsourcing-status" class="lookup-status" role="status" aria-live="polite"></p>
 <label for="outsourcing-new" id="outsourcing-new-label">Nome da nova terceirizada
 <input id="outsourcing-new" name="terceirizadaNome" maxlength="180" minlength="3" placeholder="Nome da empresa terceirizada" required></label>
+</div>
 </div>
 <div>
 <label for="final-company">Cliente final atendido
 <select id="final-company" name="clienteFinalId" required>
 <option value="__nova__">Cadastrar novo cliente final</option>
 </select></label>
+<div id="final-new-fields">
+<label for="final-cnpj">CNPJ do cliente final
+<input id="final-cnpj" name="clienteFinalCnpj" maxlength="20" placeholder="00.000.000/0000-00"></label>
+<button id="lookup-final" class="secondary" type="button">Consultar CNPJ do cliente final</button>
+<p id="lookup-final-status" class="lookup-status" role="status" aria-live="polite"></p>
 <label for="final-new" id="final-new-label">Nome do novo cliente final
 <input id="final-new" name="clienteFinalNome" maxlength="180" minlength="3" placeholder="Nome do cliente final" required></label>
+</div>
 </div>
 </div>
 <button type="submit">Salvar terceirizada + cliente final</button>
