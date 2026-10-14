@@ -8,6 +8,7 @@ const LicenseModel = require('./license-utils');
 const RHiDMonitor = require('./rhid-monitor');
 const Recovery = require('./recovery');
 const {serviceDesk}=require('./service-desk');
+const Cnpj=require('./cnpj-lookup');
 
 function teamApi(options={}) {
   const KEY=String(options.key||'');
@@ -21,6 +22,10 @@ function teamApi(options={}) {
   for(const type of ['clients','orders','drafts','finance'])data.workspace[type]||=[];
   // Relacionamentos preservados separadamente para não se perderem na sincronização de OS do APK.
   data.companyLinks||={};
+  // Dados do CNPJ separados: sincronizações antigas do APK não os sobrescrevem.
+  data.companyDetails||={};
+  if(!data.companyDetails||typeof data.companyDetails!=='object'||Array.isArray(data.companyDetails))
+    throw Error('Detalhes de empresas inválidos.');
   if(typeof data.companyLinks!=='object'||Array.isArray(data.companyLinks))throw Error('Vínculos de empresas inválidos.');
   data.audit||=[];
   // Licenças possuem revisão independente: atualizações das OS não sobrescrevem este cadastro.
@@ -90,9 +95,16 @@ function teamApi(options={}) {
   const companyName=x=>String(x?.nome||x?.razaoSocial||'Empresa');
   const normCompany=x=>String(x||'').trim().replace(/\s+/g,' ');
   const isContractor=id=>Object.values(data.companyLinks).includes(id);
+  const cnpjCache=new Map(),cnpjRequests=new Map();
+  const detailFor=company=>data.companyDetails[company.id]||{};
+  const uniqueCnpj=(cnpj,except='')=>!cnpj||!data.workspace.clients.some(c=>c.id!==except&&
+    Cnpj.normalizeCnpj(detailFor(c).cnpj||c.cnpj||'')===cnpj);
+  const uniqueCompanyName=(nome,except='')=>!data.workspace.clients.some(c=>c.id!==except&&
+    companyName(c).trim().toLocaleLowerCase('pt-BR')===nome.trim().toLocaleLowerCase('pt-BR'));
   function safeCompany(c){
     const terceirizadaId=data.companyLinks[c.id]||'';
-    return {id:c.id,nome:companyName(c),
+    return {id:c.id,nome:companyName(c),razaoSocial:detailFor(c).razaoSocial||c.razaoSocial||companyName(c),
+      ...{...detailFor(c),cnpj:detailFor(c).cnpj||Cnpj.normalizeCnpj(c.cnpj||'')},
       tipoEmpresa:terceirizadaId?'cliente-final':isContractor(c.id)?'terceirizada':'independente',
       terceirizadaId,
       terceirizadaNome:terceirizadaId?companyName(companyById(terceirizadaId)):''};
