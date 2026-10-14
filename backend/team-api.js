@@ -403,9 +403,11 @@ function teamApi(options={}) {
           return {company:{id:crypto.randomUUID(),nome,razaoSocial:details.razaoSocial||nome},details,create:true};
         };
         const outsourcing=resolve(b.terceirizadaId,b.terceirizadaNome,'a empresa terceirizada',
-          {cnpj:b.terceirizadaCnpj,razaoSocial:b.terceirizadaRazaoSocial});
+          {...(b.terceirizadaDetalhes&&typeof b.terceirizadaDetalhes==='object'&&!Array.isArray(b.terceirizadaDetalhes)?b.terceirizadaDetalhes:{}),
+            cnpj:b.terceirizadaCnpj,razaoSocial:b.terceirizadaRazaoSocial||b.terceirizadaDetalhes?.razaoSocial});
         const final=resolve(b.clienteFinalId,b.clienteFinalNome,'o cliente final',
-          {cnpj:b.clienteFinalCnpj,razaoSocial:b.clienteFinalRazaoSocial});
+          {...(b.clienteFinalDetalhes&&typeof b.clienteFinalDetalhes==='object'&&!Array.isArray(b.clienteFinalDetalhes)?b.clienteFinalDetalhes:{}),
+            cnpj:b.clienteFinalCnpj,razaoSocial:b.clienteFinalRazaoSocial||b.clienteFinalDetalhes?.razaoSocial});
         if(outsourcing.company.id===final.company.id||
            companyName(outsourcing.company).toLocaleLowerCase('pt-BR')===companyName(final.company).toLocaleLowerCase('pt-BR'))
           return send(res,400,{error:'Terceirizada e cliente final devem ser empresas diferentes.'});
