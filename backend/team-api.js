@@ -387,7 +387,7 @@ function teamApi(options={}) {
       if(req.method==='POST'&&p==='companies/link'){
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador vincula terceirizadas e clientes finais.'});
         const b=await body(req);
-        const resolve=(id,name,label)=>{
+        const resolve=(id,name,label,inputDetails={})=>{
           if(id!==undefined&&id!==null&&id!==''){
             if(typeof id!=='string'||id.length>100)throw {status:400,message:'ID inválido para '+label+'.'};
             const company=companyById(id);
@@ -398,10 +398,14 @@ function teamApi(options={}) {
           if(nome.length<3||nome.length>180)throw {status:400,message:'Informe '+label+' (3 a 180 caracteres).'};
           if(data.workspace.clients.some(x=>companyName(x).toLocaleLowerCase('pt-BR')===nome.toLocaleLowerCase('pt-BR')))
             throw {status:409,message:label+' já está cadastrada. Selecione o cadastro existente.'};
-          return {company:{id:crypto.randomUUID(),nome,razaoSocial:nome},create:true};
+          const details=Cnpj.details(inputDetails);
+          if(!uniqueCnpj(details.cnpj))throw {status:409,message:'Este CNPJ já pertence a outra empresa cadastrada.'};
+          return {company:{id:crypto.randomUUID(),nome,razaoSocial:details.razaoSocial||nome},details,create:true};
         };
-        const outsourcing=resolve(b.terceirizadaId,b.terceirizadaNome,'a empresa terceirizada');
-        const final=resolve(b.clienteFinalId,b.clienteFinalNome,'o cliente final');
+        const outsourcing=resolve(b.terceirizadaId,b.terceirizadaNome,'a empresa terceirizada',
+          {cnpj:b.terceirizadaCnpj,razaoSocial:b.terceirizadaRazaoSocial});
+        const final=resolve(b.clienteFinalId,b.clienteFinalNome,'o cliente final',
+          {cnpj:b.clienteFinalCnpj,razaoSocial:b.clienteFinalRazaoSocial});
         if(outsourcing.company.id===final.company.id||
            companyName(outsourcing.company).toLocaleLowerCase('pt-BR')===companyName(final.company).toLocaleLowerCase('pt-BR'))
           return send(res,400,{error:'Terceirizada e cliente final devem ser empresas diferentes.'});
@@ -409,11 +413,19 @@ function teamApi(options={}) {
           return send(res,409,{error:'Esta terceirizada já é cliente final de outra empresa. Cadastre outra empresa terceirizada.'});
         if(isContractor(final.company.id))
           return send(res,409,{error:'Este cliente final já atua como terceirizada de outros clientes. Selecione outro cliente.'});
+        if(outsourcing.create&&final.create&&outsourcing.details.cnpj&&outsourcing.details.cnpj===final.details.cnpj)
+          return send(res,409,{error:'Terceirizada e cliente final não podem ter o mesmo CNPJ.'});
         const creates=Number(Boolean(outsourcing.create))+Number(Boolean(final.create));
         if(data.workspace.clients.length+creates>1500)
           return send(res,409,{error:'Limite de empresas cadastradas atingido.'});
-        if(outsourcing.create)data.workspace.clients.push(outsourcing.company);
-        if(final.create)data.workspace.clients.push(final.company);
+        if(outsourcing.create){
+          data.workspace.clients.push(outsourcing.company);
+          data.companyDetails[outsourcing.company.id]=outsourcing.details;
+        }
+        if(final.create){
+          data.workspace.clients.push(final.company);
+          data.companyDetails[final.company.id]=final.details;
+        }
         data.companyLinks[final.company.id]=outsourcing.company.id;
         // A terceirizada não é o cliente final; invalidar antigos links diretos de atendimento.
         if(data.clientPortals)delete data.clientPortals[outsourcing.company.id];
