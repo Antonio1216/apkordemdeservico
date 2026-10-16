@@ -1,0 +1,28 @@
+name: Validar cadastro RHiD multicliente
+on:
+  push:
+    branches: [main]
+    paths:
+      - backend/team-api.js
+      - backend/tests/rhid-bases.test.js
+      - .github/workflows/testar-rhid-bases.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  testes-rhid-bases:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar código
+        uses: actions/checkout@v4
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar sintaxe
+        run: node --check backend/team-api.js && node --check backend/tests/rhid-bases.test.js
+      - name: Testar associação de bases e permissões
+        working-directory: backend
+        run: node --test tests/rhid-bases.test.js
