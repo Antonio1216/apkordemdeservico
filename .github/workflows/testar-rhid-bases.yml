@@ -26,3 +26,6 @@ jobs:
       - name: Testar associação de bases e permissões
         working-directory: backend
         run: node --test tests/rhid-bases.test.js
+      - name: Rodar testes completos do backend
+        working-directory: backend
+        run: npm test
