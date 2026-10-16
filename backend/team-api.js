@@ -33,6 +33,10 @@ function teamApi(options={}) {
   if(!Array.isArray(data.licenses.items))throw Error('Base de licenças corrompida.');
   if(!Number.isInteger(data.licenses.revision))data.licenses.revision=0;
   // Apenas histórico de alterações de conectividade; sem dados pessoais do RHiD.
+  // Cada empresa possui uma configuracao propria de dominio RHiD, sem credenciais.
+  if(data.rhidBases===undefined)data.rhidBases={};
+  if(!data.rhidBases||typeof data.rhidBases!=='object'||Array.isArray(data.rhidBases))
+    throw Error('Cadastro de bases RHiD inválido.');
   data.rhidMonitor||={statuses:{},events:[]};
   if(!Array.isArray(data.rhidMonitor.events))data.rhidMonitor.events=[];
   if(!data.rhidMonitor.statuses||typeof data.rhidMonitor.statuses!=='object')data.rhidMonitor.statuses={};
@@ -334,6 +338,47 @@ function teamApi(options={}) {
       if(req.method==='GET'&&p==='companies'){
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Lista de empresas restrita ao administrador.'});
         return send(res,200,{companies:data.workspace.clients.map(safeCompany)});
+      }
+      // Etapa 1 multicliente RHiD: apenas dominios publicamente identificaveis.
+      // Nao aceitar e-mail, senha, token ou URL de autenticacao neste cadastro.
+      if(req.method==='GET'&&p==='rhid-bases'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode consultar bases RHiD.'});
+        const bases=Object.entries(data.rhidBases)
+          .filter(([companyId])=>Boolean(companyById(companyId)))
+          .map(([companyId,cfg])=>({companyId,empresa:companyName(companyById(companyId)),
+            domain:cfg.domain,active:cfg.active!==false,updatedAt:cfg.updatedAt}));
+        return send(res,200,{bases,authenticationConfigured:false,
+          message:'Primeira etapa: cadastros de domínio. Credenciais RHiD ainda não são armazenadas.'});
+      }
+      const rhidBaseRoute=p.match(/^rhid-bases\/([A-Za-z0-9_-]{1,100})$/);
+      if(rhidBaseRoute&&(req.method==='PUT'||req.method==='DELETE')){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente o administrador pode configurar bases RHiD.'});
+        const companyId=rhidBaseRoute[1],company=companyById(companyId);
+        if(!company)return send(res,404,{error:'Cadastre a empresa antes de vincular uma base RHiD.'});
+        if(req.method==='DELETE'){
+          if(!data.rhidBases[companyId])return send(res,404,{error:'Nenhuma base RHiD vinculada a esta empresa.'});
+          delete data.rhidBases[companyId];
+          writeAudit('rhid-base-remove',actor.id);
+          await persist();return send(res,200,{ok:true});
+        }
+        const input=await body(req);
+        if(!input||typeof input!=='object'||Array.isArray(input)||
+          Object.keys(input).some(key=>!['domain','active'].includes(key)))
+          return send(res,400,{error:'Informe apenas o domínio RHID e o estado ativo. Nunca envie senhas neste cadastro.'});
+        const domain=typeof input.domain==='string'?input.domain.trim().toLowerCase():'';
+        if(!/^[a-z0-9][a-z0-9._-]{0,159}$/.test(domain))
+          return send(res,400,{error:'Domínio RHID inválido: informe o identificador da base, sem HTTPS ou espaços.'});
+        if(input.active!==undefined&&typeof input.active!=='boolean')
+          return send(res,400,{error:'O campo ativo precisa ser verdadeiro ou falso.'});
+        if(Object.entries(data.rhidBases).some(([id,cfg])=>id!==companyId&&cfg.domain===domain))
+          return send(res,409,{error:'Este domínio RHID já está vinculado a outra empresa.'});
+        const now=new Date().toISOString(),previous=data.rhidBases[companyId];
+        data.rhidBases[companyId]={domain,active:input.active!==false,
+          createdAt:previous?.createdAt||now,updatedAt:now};
+        writeAudit(previous?'rhid-base-update':'rhid-base-create',actor.id);
+        await persist();
+        return send(res,200,{base:{companyId,empresa:companyName(company),
+          domain,active:data.rhidBases[companyId].active,updatedAt:now}});
       }
       const cnpjRoute=p.match(/^companies\/cnpj\/([0-9A-Za-z.-]{14,20})$/);
       if(req.method==='GET'&&cnpjRoute){
