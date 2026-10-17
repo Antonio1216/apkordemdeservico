@@ -37,7 +37,7 @@ function normalize(body){
   });
 }
 // The RHiD token is held in memory ONLY. Credentials remain in Render secrets.
-let loginCache=null,loginInFlight=null;
+const loginCache=new Map(),loginInFlight=new Map();
 function loginEndpoint(deviceUrl){
   const url=new URL(endpoint(deviceUrl));
   url.pathname='/v2/api.svc/login';
@@ -71,8 +71,9 @@ async function obtainLoginToken({email,password,domain,url,fetcher,force=false})
   if(!validText(email,254)||!validText(password,300)||domain&&!validText(domain,160))
     throw Error('Credenciais de integração RHiD inválidas.');
   const key=loginCacheKey(email,password,domain||'');
-  if(!force&&loginCache?.key===key&&loginCache.validUntil>Date.now())return loginCache.token;
-  if(!force&&loginInFlight?.key===key)return loginInFlight.promise;
+  const cached=loginCache.get(key);
+  if(!force&&cached?.validUntil>Date.now())return cached.token;
+  if(!force&&loginInFlight.has(key))return loginInFlight.get(key);
   const task=(async()=>{
     const response=await fetcher(loginEndpoint(url),{
       method:'POST',redirect:'error',signal:AbortSignal.timeout(9000),
@@ -86,11 +87,12 @@ async function obtainLoginToken({email,password,domain,url,fetcher,force=false})
     if(!validText(token,8192)||/\s/.test(token))
       throw Error('O RHiD não retornou um accessToken válido.');
     if(result.expiredPassword===true)throw Error('A senha do RHiD está expirada; atualize-a antes de integrar.');
-    loginCache={key,token,validUntil:tokenExpiry(token)};
+    if(loginCache.size>100)loginCache.clear();
+    loginCache.set(key,{token,validUntil:tokenExpiry(token)});
     return token;
   })();
-  loginInFlight={key,promise:task};
-  try{return await task;}finally{if(loginInFlight?.promise===task)loginInFlight=null;}
+  loginInFlight.set(key,task);
+  try{return await task;}finally{if(loginInFlight.get(key)===task)loginInFlight.delete(key);}
 }
 async function readDevices({
   token=process.env.RHID_API_TOKEN,
@@ -117,7 +119,8 @@ async function readDevices({
   let response=await getDevices(accessToken);
   if(response.status===401&&hasLogin){
     // Token expired or rejected: renew via POST /login once, then retry GET /device.
-    if(loginCache?.token===accessToken)loginCache=null;
+    const key=loginCacheKey(email,password,domain||'');
+    if(loginCache.get(key)?.token===accessToken)loginCache.delete(key);
     accessToken=await obtainLoginToken({email,password,domain,url:deviceUrl,fetcher,force:true});
     response=await getDevices(accessToken);
   }
