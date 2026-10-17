@@ -44,8 +44,15 @@ test('dominios RHiD isolados por empresa, persistentes e apenas para administrad
   company=await call('companies','POST',{nome:'Cliente de Teste B'},token);
   assert.equal(company.status,201);
   const other=company.body.company.id;
+  company=await call('companies','POST',{nome:'prefeiturahorizonte'},token);
+  assert.equal(company.status,201);
+  const prefeitura=company.body.company.id;
   r=await call('rhid-bases','GET',undefined,token);assert.equal(r.status,200);
   assert.deepEqual(r.body.bases,[]);
+  assert.ok(r.body.suggestedBases.some(b=>b.companyId===prefeitura&&b.domain==='prefeiturahorizonte'&&b.needsConfirmation));
+  assert.ok(!r.body.suggestedBases.some(b=>b.companyId===id));
+  const dbBefore=JSON.parse(fs.readFileSync(path.join(dir,'team.json'),'utf8'));
+  assert.ok(!dbBefore.rhidBases || !dbBefore.rhidBases[prefeitura]);
   assert.equal(r.body.authenticationConfigured,false);
   assert.equal((await call('rhid-bases/'+id,'PUT',{domain:'cliente.a'},null)).status,401);
   assert.equal((await call('rhid-bases/'+id,'PUT',{domain:'https://example.com'},token)).status,400);
@@ -56,6 +63,9 @@ test('dominios RHiD isolados por empresa, persistentes e apenas para administrad
   assert.equal(r.body.bases.length,1);
   assert.equal(r.body.bases[0].companyId,id);
   assert.equal((await call('rhid-bases/'+other,'PUT',{domain:'cliente_a'},token)).status,409);
+  assert.equal((await call('rhid-bases/'+prefeitura,'PUT',{domain:'prefeiturahorizonte'},token)).status,200);
+  r=await call('rhid-bases','GET',undefined,token);
+  assert.equal(r.body.suggestedBases.some(b=>b.companyId===prefeitura),false);
   const tech=await call('users','POST',{nome:'Tecnico RHID',login:'tecnico.rh',senha:'abcdef',perfil:'Técnico'},token);
   assert.equal(tech.status,200);
   const login=await call('login','POST',{login:'tecnico.rh',senha:'abcdef'});
