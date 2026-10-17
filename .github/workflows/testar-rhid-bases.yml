@@ -4,6 +4,8 @@ on:
     branches: [main]
     paths:
       - backend/team-api.js
+      - backend/rhid-monitor.js
+      - backend/tests/rhid-login.test.js
       - backend/tests/rhid-bases.test.js
       - .github/workflows/testar-rhid-bases.yml
   workflow_dispatch:
@@ -22,7 +24,7 @@ jobs:
         with:
           node-version: '22'
       - name: Validar sintaxe
-        run: node --check backend/team-api.js && node --check backend/tests/rhid-bases.test.js
+        run: node --check backend/team-api.js && node --check backend/rhid-monitor.js && node --check backend/tests/rhid-bases.test.js
       - name: Testar associação de bases e permissões
         working-directory: backend
         run: node --test tests/rhid-bases.test.js
