@@ -57,3 +57,30 @@ test('login RHiD aceita resposta JSON com envelope Swagger ou sem ele',async()=>
  }});
  assert.equal(result.devices.length,1);
 });
+
+
+test('mesmo e-mail e senha geram sessoes isoladas por dominio',async()=>{
+  const credentials={email:'compartilhado-rhid@empresa.test',password:'uma-senha-forte-exclusiva-de-teste'};
+  const logins=[],reads=[];
+  const fetcher=async(url,request)=>{
+    if(request.method==='POST'){
+      const payload=JSON.parse(request.body);
+      logins.push(payload.domain);
+      return json({accessToken:'token-dom-'+payload.domain});
+    }
+    reads.push(request.headers.Authorization);
+    return json({records:[{id:1,name:'Relogio',serial:'SN-TESTE',status:'online'}]});
+  };
+  const a='prefeiturahorizonte',b='carnaubal';
+  const result=await Promise.all([
+    m.readDevices({...credentials,domain:a,fetcher}),
+    m.readDevices({...credentials,domain:b,fetcher})
+  ]);
+  assert.deepEqual(logins.sort(),[b,a].sort());
+  assert.equal(result[0].devices[0].id,'1');
+  assert.equal(result[1].devices[0].id,'1');
+  assert.deepEqual(reads.sort(),['Bearer token-dom-'+a,'Bearer token-dom-'+b].sort());
+  await m.readDevices({...credentials,domain:a,fetcher});
+  await m.readDevices({...credentials,domain:b,fetcher});
+  assert.equal(logins.length,2,'cada dominio deve reutilizar somente seu proprio token');
+});
