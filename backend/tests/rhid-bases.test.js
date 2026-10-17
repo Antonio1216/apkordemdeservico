@@ -76,5 +76,8 @@ test('dominios RHiD isolados por empresa, persistentes e apenas para administrad
   assert.equal(persisted.rhidBases[id].domain,'cliente_a');
   assert.equal('password' in persisted.rhidBases[id],false);
   assert.equal((await call('rhid-bases/'+id,'DELETE',undefined,token)).status,200);
-  assert.deepEqual((await call('rhid-bases','GET',undefined,token)).body.bases,[]);
+  const remaining=(await call('rhid-bases','GET',undefined,token)).body.bases;
+  assert.equal(remaining.length,1);
+  assert.equal(remaining[0].companyId,prefeitura);
+  assert.equal(remaining[0].domain,'prefeiturahorizonte');
 });
