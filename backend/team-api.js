@@ -99,7 +99,7 @@ function teamApi(options={}) {
   const companyName=x=>String(x?.nome||x?.razaoSocial||'Empresa');
   const normCompany=x=>String(x||'').trim().replace(/\s+/g,' ');
   const isContractor=id=>Object.values(data.companyLinks).includes(id);
-  const cnpjCache=new Map(),cnpjRequests=new Map();
+  const cnpjCache=new Map(),cnpjRequests=new Map(),rhidDeviceRequests=new Map();
   const detailFor=company=>data.companyDetails[company.id]||{};
   const uniqueCnpj=(cnpj,except='')=>!cnpj||!data.workspace.clients.some(c=>c.id!==except&&
     Cnpj.normalizeCnpj(detailFor(c).cnpj||c.cnpj||'')===cnpj);
@@ -357,6 +357,35 @@ function teamApi(options={}) {
           .map(c=>({...c,active:false,needsConfirmation:true,source:'company-name'}));
         return send(res,200,{bases,suggestedBases:suggestions,authenticationConfigured:false,
           message:'Dominios sugeridos a partir dos nomes cadastrados. Confirme cada vinculo antes de autenticar; nenhuma senha RHID esta armazenada.'});
+      }
+      // Consulta pontual de equipamentos de uma base ativa; uma sessao RHiD por dominio.
+      // O monitor legado de uma unica base continua disponivel separadamente.
+      const rhidBaseDevices=p.match(/^rhid-bases\/([A-Za-z0-9_-]{1,100})\/devices$/);
+      if(req.method==='GET'&&rhidBaseDevices){
+        if(!can(actor,'rhid'))return send(res,403,{error:'Sem permissao para consultar equipamentos RHID.'});
+        const companyId=rhidBaseDevices[1];
+        if(scopeFor(actor)!==null&&scopeFor(actor)!==companyId)
+          return send(res,403,{error:'Sem acesso a esta empresa.'});
+        const company=companyById(companyId),cfg=data.rhidBases[companyId];
+        if(!company)return send(res,404,{error:'Empresa nao encontrada.'});
+        if(!cfg||cfg.active===false)return send(res,409,{error:'Confirme o dominio RHID desta empresa antes de conectar.'});
+        if(!process.env.RHID_LOGIN_EMAIL||!process.env.RHID_LOGIN_PASSWORD)
+          return send(res,503,{error:'Configure RHID_LOGIN_EMAIL e RHID_LOGIN_PASSWORD no ambiente privado do Render.'});
+        if(!allowedAttempt(rhidDeviceRequests,actor.id+'|'+companyId,12,10*60_000))
+          return send(res,429,{error:'Aguarde antes de fazer novas consultas ao RHiD.'});
+        try{
+          const result=await RHiDMonitor.readDevices({
+            email:process.env.RHID_LOGIN_EMAIL,password:process.env.RHID_LOGIN_PASSWORD,
+            domain:cfg.domain,token:'',fetcher:options.rhidFetch||globalThis.fetch
+          });
+          // O conjunto de dados nunca se mistura com outra base, mesmo que IDs coincidam.
+          const devices=result.devices.map(d=>({...d,empresaId:companyId,empresa:companyName(company)}));
+          return send(res,200,{configured:true,companyId,empresa:companyName(company),
+            domain:cfg.domain,devices,summary:RHiDMonitor.summary(devices),updatedAt:new Date().toISOString()});
+        }catch(err){
+          // Nunca enviar o corpo upstream, tokens ou senhas para o app ou logs.
+          return send(res,502,{error:'Falha ao consultar equipamentos do domínio RHID selecionado. Confira credenciais e permissões.'});
+        }
       }
       const rhidBaseRoute=p.match(/^rhid-bases\/([A-Za-z0-9_-]{1,100})$/);
       if(rhidBaseRoute&&(req.method==='PUT'||req.method==='DELETE')){
