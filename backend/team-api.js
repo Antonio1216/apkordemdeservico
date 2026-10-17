@@ -347,8 +347,16 @@ function teamApi(options={}) {
           .filter(([companyId])=>Boolean(companyById(companyId)))
           .map(([companyId,cfg])=>({companyId,empresa:companyName(companyById(companyId)),
             domain:cfg.domain,active:cfg.active!==false,updatedAt:cfg.updatedAt}));
-        return send(res,200,{bases,authenticationConfigured:false,
-          message:'Primeira etapa: cadastros de domínio. Credenciais RHiD ainda não são armazenadas.'});
+        // No ACR OS Pro os nomes curtos cadastrados como empresas sao dominios RHID.
+        // Sugestoes sao somente leitura: nao ativam conexoes e nao sobrescrevem dados existentes.
+        const savedDomains=new Set(bases.map(b=>b.domain));
+        const suggestions=data.workspace.clients.filter(c=>!data.rhidBases[c.id])
+          .map(c=>({companyId:c.id,empresa:companyName(c),
+            domain:companyName(c).trim().toLowerCase()}))
+          .filter(c=>/^[a-z0-9][a-z0-9._-]{0,159}$/.test(c.domain)&&!savedDomains.has(c.domain))
+          .map(c=>({...c,active:false,needsConfirmation:true,source:'company-name'}));
+        return send(res,200,{bases,suggestedBases:suggestions,authenticationConfigured:false,
+          message:'Dominios sugeridos a partir dos nomes cadastrados. Confirme cada vinculo antes de autenticar; nenhuma senha RHID esta armazenada.'});
       }
       const rhidBaseRoute=p.match(/^rhid-bases\/([A-Za-z0-9_-]{1,100})$/);
       if(rhidBaseRoute&&(req.method==='PUT'||req.method==='DELETE')){
