@@ -42,3 +42,11 @@ Sem credenciais, mostra Aguardando configuração, sem dados fictícios.
 O GitHub testa e compila a versão 1.7.9, mas não distribui APK debug instalável.
 A instalação por cima da versão existente exige o certificado/chave original de assinatura compatível.
 Não desinstale o ACR OS Pro nem limpe seus dados. Veja docs/atualizacao-apk-segura.md.
+
+## Seleção automática de domínios (v1.7.10)
+
+Após autenticar com RHID_LOGIN_EMAIL e RHID_LOGIN_PASSWORD, o backend consulta POST /login sem domínio e lê listCustomer (id, domain, name). Apenas administradores ACR OS Pro recebem a lista saneada, sem tokens e sem senhas, por GET /api/team/rhid-domains.
+
+Ao escolher um cliente, GET /api/team/rhid-domains/:domain/devices verifica a associação na lista autorizada e então autentica separadamente no domínio para consultar GET /device. Não é necessário configurar RHID_LOGIN_DOMAIN para esse fluxo. A lista expira em 60 segundos e os JWTs específicos de cada domínio são guardados apenas na memória do backend.
+
+Se o login do fornecedor não devolver listCustomer, a seleção automática mostra um erro e requer diagnóstico com o suporte da Control iD. Não é criada uma lista fictícia nem exposto o JSON completo do login. O aplicativo deve ser atualizado com APK assinado 1.7.10 para mostrar o seletor.
