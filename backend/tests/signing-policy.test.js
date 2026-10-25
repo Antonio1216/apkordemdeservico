@@ -14,8 +14,8 @@ test('nenhum APK DEBUG com assinatura aleatória é publicado pelo workflow',()=
   assert.match(workflow,/github\.event_name == 'workflow_dispatch' && github\.ref == 'refs\/heads\/main'/);
   assert.match(workflow,/scripts\/sign-android-update\.sh/);
   assert.match(workflow,/ACR_SIGNER_SHA256:\s*\$\{\{ vars\.ACR_SIGNER_SHA256 \}\}/);
-  assert.match(workflow,/name: ACR-OS-Pro-v1\.7\.9-Atualizacao-Assinada/);
-  assert.match(workflow,/path: dist\/ACR-OS-Pro-v1\.7\.9-Atualizacao-Assinada\.apk/);
+  assert.match(workflow,/name: ACR-OS-Pro-v1\.7\.10-Atualizacao-Assinada/);
+  assert.match(workflow,/path: dist\/ACR-OS-Pro-v1\.7\.10-Atualizacao-Assinada\.apk/);
 });
 test('sem keystore permanente e fingerprint, assinatura falha fechada',()=>{
   const env={...process.env,ANDROID_HOME:'/tmp/android-test-sdk',
