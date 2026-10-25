@@ -6,6 +6,7 @@ const crypto = require('node:crypto');
 const {calculateTravel} = require('./travel');
 const LicenseModel = require('./license-utils');
 const RHiDMonitor = require('./rhid-monitor');
+const RHiDDomains = require('./rhid-domains');
 const Recovery = require('./recovery');
 const {serviceDesk}=require('./service-desk');
 const Cnpj=require('./cnpj-lookup');
@@ -338,6 +339,41 @@ function teamApi(options={}) {
       if(req.method==='GET'&&p==='companies'){
         if(actor.perfil!=='Administrador')return send(res,403,{error:'Lista de empresas restrita ao administrador.'});
         return send(res,200,{companies:data.workspace.clients.map(safeCompany)});
+      }
+      // Domain listing and selection are private to authenticated ACR administrators.
+      if(req.method==='GET'&&p==='rhid-domains'){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente administradores podem descobrir domínios RHiD.'});
+        if(!process.env.RHID_LOGIN_EMAIL||!process.env.RHID_LOGIN_PASSWORD)
+          return send(res,503,{error:'Configure RHID_LOGIN_EMAIL e RHID_LOGIN_PASSWORD no Render.'});
+        try{
+          const domains=await RHiDDomains.listDomains({
+            email:process.env.RHID_LOGIN_EMAIL,password:process.env.RHID_LOGIN_PASSWORD,
+            fetcher:options.rhidFetch||globalThis.fetch
+          });
+          return send(res,200,{configured:true,domains,message:domains.length?'Domínios encontrados.':'O RHiD não retornou domínios disponíveis.'});
+        }catch(e){return send(res,502,{error:'Falha ao descobrir domínios RHiD: '+e.message});}
+      }
+      const selectedRhid=p.match(/^rhid-domains\/([A-Za-z0-9_.-]{1,160})\/devices$/);
+      if(req.method==='GET'&&selectedRhid){
+        if(actor.perfil!=='Administrador')return send(res,403,{error:'Somente administradores podem consultar domínios RHiD.'});
+        if(!process.env.RHID_LOGIN_EMAIL||!process.env.RHID_LOGIN_PASSWORD)
+          return send(res,503,{error:'Configure RHID_LOGIN_EMAIL e RHID_LOGIN_PASSWORD no Render.'});
+        const domain=selectedRhid[1].toLowerCase();
+        try{
+          const fetcher=options.rhidFetch||globalThis.fetch;
+          const domains=await RHiDDomains.listDomains({
+            email:process.env.RHID_LOGIN_EMAIL,password:process.env.RHID_LOGIN_PASSWORD,fetcher
+          });
+          const client=domains.find(c=>c.domain===domain);
+          if(!client)return send(res,403,{error:'Domínio não autorizado para a conta RHiD.'});
+          const result=await RHiDMonitor.readDevices({
+            email:process.env.RHID_LOGIN_EMAIL,password:process.env.RHID_LOGIN_PASSWORD,
+            domain:client.domain,token:'',fetcher
+          });
+          const devices=result.devices.map(d=>({...d,empresaId:'rhid:'+client.domain,empresa:client.name}));
+          return send(res,200,{configured:true,domain:client.domain,client:client.name,devices,events:[],
+            summary:RHiDMonitor.summary(devices),updatedAt:new Date().toISOString()});
+        }catch(e){return send(res,502,{error:'Falha ao consultar equipamentos RHiD do domínio selecionado. Verifique a integração.'});}
       }
       // Etapa 1 multicliente RHiD: apenas dominios publicamente identificaveis.
       // Nao aceitar e-mail, senha, token ou URL de autenticacao neste cadastro.
