@@ -31,7 +31,7 @@ once(app,"'ordens','clientes','assinaturas','catalogo','licencas']){",
           "'ordens','clientes','assinaturas','catalogo','licencas','rhid']){")
 once(app,"'ordens','clientes','assinaturas','catalogo','licencas'].includes(name)",
           "'ordens','clientes','assinaturas','catalogo','licencas','rhid'].includes(name)")
-once(app,"  window.OSProVersion = '1.7.8';","  window.OSProVersion = '1.7.9';")
+once(app,"  window.OSProVersion = '1.7.8';","  window.OSProVersion = '1.7.10';")
 styles=assets/"styles.css"
 styles.write_text(styles.read_text(encoding="utf-8")+'''
 /* ACR OS Pro v1.7.9 — Monitoramento RHiD com cores e foco acessíveis */
@@ -56,6 +56,6 @@ once(native,'                        "licenses"->"Licencas-Software"',
 '''                        "licenses"->"Licencas-Software"
                         "rhid"->"Monitoramento-RHiD"''')
 gradle=root/"app/build.gradle.kts"
-once(gradle,'versionName = "1.7.8"','versionName = "1.7.9"')
-once(gradle,'versionCode = 17','versionCode = 18')
+once(gradle,'versionName = "1.7.8"','versionName = "1.7.10"')
+once(gradle,'versionCode = 17','versionCode = 19')
 print("ACR OS Pro 1.7.9: painel RHiD, permissão exclusiva e relatório PDF habilitados.")
