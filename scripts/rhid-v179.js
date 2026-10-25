@@ -4,6 +4,33 @@ window.OSAuth.ready.then(async()=>{
   if(!window.OSAuth.can('rhid'))return;
   const $=s=>document.querySelector(s), status=$('#rhid-message'),pdfStatus=$('#rhid-export-status');
   let snapshot=null,busy=false,pdfPending=false;
+  let discovery='pending';
+  const domainSelect=$('#rhid-domain-select');
+  async function loadDomains(){
+    try{
+      if(typeof window.OSTeam.serviceDeskRequest!=='function')
+        throw Error('Atualize o aplicativo para habilitar a lista de domínios.');
+      const result=await window.OSTeam.serviceDeskRequest('rhid-domains');
+      if(!Array.isArray(result.domains))throw Error('Resposta de domínios inválida.');
+      domainSelect.replaceChildren(new Option('Selecione um cliente RHiD',''));
+      for(const client of result.domains)
+        domainSelect.add(new Option((client.name||client.domain)+' ('+client.domain+')',client.domain));
+      domainSelect.disabled=!result.domains.length;
+      discovery=result.domains.length?'ready':'empty';
+    }catch(e){
+      // Non-admin users continue using their previous scoped monitoring route.
+      if(/403|administrador|permiss[aã]o|forbidden/i.test(e.message)){
+        discovery='legacy';
+        domainSelect.replaceChildren(new Option('Monitoramento autorizado da empresa',''));
+        domainSelect.disabled=true;
+      }else{
+        discovery='error';
+        domainSelect.replaceChildren(new Option('Não foi possível obter domínios',''));
+        domainSelect.disabled=true;
+        note('Falha ao listar domínios RHiD: '+e.message,true);
+      }
+    }
+  }
   const txt=v=>String(v??''),date=v=>v?new Date(v).toLocaleString('pt-BR'):'Não informada';
   const note=(message,error=false)=>{status.textContent=message;status.classList.toggle('rhid-error',error);};
   const pdfNote=(message,error=false)=>{pdfStatus.textContent=message;pdfStatus.classList.toggle('rhid-error',error);};
@@ -68,9 +95,23 @@ window.OSAuth.ready.then(async()=>{
   }
   async function refresh(){
     if(busy)return;
-    busy=true;$('#rhid-refresh').disabled=true;note('Consultando o RHiD por meio do servidor Render...');
+    busy=true;$('#rhid-refresh').disabled=true;
     try{
-      const response=await window.OSTeam.fetchRhidMonitor();
+      if(discovery==='pending')await loadDomains();
+      if(discovery==='error')return;
+      if(discovery==='empty'){
+        snapshot=null;render();
+        note('O login RHiD não retornou listCustomer. Confirme com a Control iD o fluxo de seleção de domínios.',true);
+        return;
+      }
+      if(discovery==='ready'&&!domainSelect.value){
+        snapshot=null;render();
+        note('Selecione um cliente no campo Domínio RHiD para consultar os relógios.');
+        return;
+      }
+      note('Consultando os relógios do cliente selecionado...');
+      const response=discovery==='legacy'?await window.OSTeam.fetchRhidMonitor():
+        await window.OSTeam.serviceDeskRequest('rhid-domains/'+encodeURIComponent(domainSelect.value)+'/devices');
       snapshot=response;render();
       note(response.configured?
         'Consulta concluída. '+response.summary.total+' equipamentos, '+response.summary.online+
@@ -138,6 +179,12 @@ window.OSAuth.ready.then(async()=>{
       data.groups.map(g=>'<h2>'+clean(g.heading)+'</h2>'+g.items.map(x=>'<article><b>'+clean(x.title)+'</b>'+
         x.lines.map(line=>'<p>'+clean(line)+'</p>').join('')+'</article>').join('')).join('')+'</html>';
     w.document.write(markup);w.document.close();w.print();pdfNote('Selecione Salvar como PDF na janela de impressão.');
+  };
+  domainSelect.onchange=()=>{
+    snapshot=null;
+    $('#rhid-company-filter').value='';
+    render();
+    refresh();
   };
   $('#rhid-refresh').onclick=refresh;
   $('#rhid-search').oninput=render;
