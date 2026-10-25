@@ -1,4 +1,4 @@
-name: ACR OS Pro 1.7.9 - Monitoramento RHiD (compilacao e assinatura segura)
+name: ACR OS Pro 1.7.10 - Monitoramento RHiD (compilacao e assinatura segura)
 
 on:
   pull_request:
