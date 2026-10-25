@@ -5,6 +5,12 @@
         <h2>Conexão com o RHiD</h2>
         <p id="rhid-message" class="hint" role="status" aria-live="polite">Preparando consulta segura ao RHiD...</p>
         <p class="hint">O acesso à API é configurado no servidor Render. Nenhum usuário precisa informar sua senha RHiD no aplicativo.</p>
+        <label for="rhid-domain-select">Cliente / domínio RHiD
+          <select id="rhid-domain-select" aria-describedby="rhid-domain-help">
+            <option value="">Carregando domínios...</option>
+          </select>
+        </label>
+        <p id="rhid-domain-help" class="hint">Selecione um cliente para consultar seus relógios. Suas credenciais permanecem no Render.</p>
         <p id="rhid-updated" class="hint"></p>
         <div class="actions">
           <button id="rhid-refresh" type="button" class="primary">Atualizar equipamentos</button>
