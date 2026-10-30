@@ -1,4 +1,4 @@
-name: ACR OS Pro 1.7.10 - Monitoramento RHiD (compilacao e assinatura segura)
+name: ACR OS Pro 1.7.11 - Monitoramento RHiD (compilacao e assinatura segura)
 
 on:
   pull_request:
@@ -32,6 +32,7 @@ on:
       - 'scripts/recovery-ui-v180.js'
       - 'scripts/rhid-v179.js'
       - 'scripts/rhid-panel-v179.html'
+      - 'scripts/add-finished-orders-v1711.py'
       - 'scripts/sign-android-update.sh'
   push:
     branches: [main]
@@ -99,6 +100,7 @@ jobs:
           python scripts/add-rhid-v179.py ospro-eletrica-software
           python scripts/add-recovery-v180.py ospro-eletrica-software
           python scripts/add-service-desk-v181.py ospro-eletrica-software
+          python scripts/add-finished-orders-v1711.py ospro-eletrica-software
           node --check ospro-eletrica-software/app/src/main/assets/service-desk-ui.js
           node --check ospro-eletrica-software/app/src/main/assets/recovery-ui.js
           node --check ospro-eletrica-software/app/src/main/assets/rhid.js
@@ -112,7 +114,7 @@ jobs:
           node --check ospro-eletrica-software/app/src/main/assets/auth.js
           node --check ospro-eletrica-software/app/src/main/assets/permissions.js
           node --check ospro-eletrica-software/app/src/main/assets/app.js
-          grep -q 'versionName = "1.7.10"' ospro-eletrica-software/app/build.gradle.kts
+          grep -q 'versionName = "1.7.11"' ospro-eletrica-software/app/build.gradle.kts
           python - <<'PY'
           from pathlib import Path
           root=Path('ospro-eletrica-software/app/src/main')
@@ -125,6 +127,8 @@ jobs:
           assert (root/'assets/reports.js').exists()
           assert (root/'assets/licenses.js').exists()
           assert (root/'assets/rhid.js').exists()
+          assert 'id="open-finished-orders"' in h
+          assert 'id="archived-order-details"' in h
           assert 'id="rhid-equipment-list"' in h
           assert 'data-tab="rhid"' in h
           assert 'data-permission="rhid"' in h
@@ -210,14 +214,14 @@ jobs:
           ACR_SIGNER_SHA256: ${{ vars.ACR_SIGNER_SHA256 }}
         run: |
           set -euo pipefail
-          bash scripts/sign-android-update.sh ospro-eletrica-software dist/ACR-OS-Pro-v1.7.10-Atualizacao-Assinada.apk
+          bash scripts/sign-android-update.sh ospro-eletrica-software dist/ACR-OS-Pro-v1.7.11-Atualizacao-Assinada.apk
 
       - name: Publicar SOMENTE APK validado (nunca DEBUG)
         if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.10-Atualizacao-Assinada
-          path: dist/ACR-OS-Pro-v1.7.10-Atualizacao-Assinada.apk
+          name: ACR-OS-Pro-v1.7.11-Atualizacao-Assinada
+          path: dist/ACR-OS-Pro-v1.7.11-Atualizacao-Assinada.apk
           retention-days: 30
           if-no-files-found: error
 
@@ -228,14 +232,14 @@ jobs:
           from pathlib import Path
           from zipfile import ZipFile, ZIP_DEFLATED
           root=Path('ospro-eletrica-software')
-          with ZipFile('ACR-OS-Pro-v1.7.10-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
+          with ZipFile('ACR-OS-Pro-v1.7.11-Fonte.zip', 'w', ZIP_DEFLATED) as archive:
               for item in root.rglob('*'):
                   if item.is_file() and not {'.gradle','build','.idea'}.intersection(item.parts):
                       archive.write(item)
           PY
       - uses: actions/upload-artifact@v4
         with:
-          name: ACR-OS-Pro-v1.7.10-Fonte
-          path: ACR-OS-Pro-v1.7.10-Fonte.zip
+          name: ACR-OS-Pro-v1.7.11-Fonte
+          path: ACR-OS-Pro-v1.7.11-Fonte.zip
           retention-days: 30
           if-no-files-found: error
