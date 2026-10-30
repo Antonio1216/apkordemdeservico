@@ -115,7 +115,7 @@ css.write_text(css.read_text('utf8')+'''
 replace(js,"window.OSProVersion = '1.7.10';","window.OSProVersion = '1.7.11';")
 replace(gradle,'versionName = "1.7.10"','versionName = "1.7.11"')
 g=gradle.read_text('utf8')
-match=re.search(r'versionCode\\s*=\\s*(\\d+)',g)
+match=re.search(r'versionCode\s*=\s*(\d+)',g)
 if not match:raise RuntimeError('versionCode nao encontrado')
 g=g[:match.start(1)]+str(int(match.group(1))+1)+g[match.end(1):]
 gradle.write_text(g,'utf8')
