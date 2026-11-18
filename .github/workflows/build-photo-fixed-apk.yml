@@ -36,6 +36,7 @@ on:
       - 'scripts/sign-android-update.sh'
       - 'scripts/auditar-migracao-local.py'
       - 'scripts/local-store-v1.js'
+      - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
       - 'scripts/test-local-store-integration.py'
   push:
@@ -73,6 +74,7 @@ on:
       - 'scripts/sign-android-update.sh'
       - 'scripts/auditar-migracao-local.py'
       - 'scripts/local-store-v1.js'
+      - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
       - 'scripts/test-local-store-integration.py'
   workflow_dispatch:
@@ -111,6 +113,7 @@ jobs:
           python scripts/add-finished-orders-v1711.py ospro-eletrica-software
           python scripts/add-local-store-v1.py ospro-eletrica-software
           node --check ospro-eletrica-software/app/src/main/assets/local-store.js
+          node --check ospro-eletrica-software/app/src/main/assets/local-modules.js
           python scripts/test-local-store-integration.py ospro-eletrica-software
           node --check ospro-eletrica-software/app/src/main/assets/service-desk-ui.js
           node --check ospro-eletrica-software/app/src/main/assets/recovery-ui.js
