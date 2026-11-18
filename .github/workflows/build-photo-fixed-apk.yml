@@ -226,6 +226,17 @@ jobs:
         working-directory: ospro-eletrica-software
         run: gradle --no-daemon --stacktrace :app:assembleDebug
 
+      # APK DEBUG exclusivo para testes na ramificação local.
+      # Não atualiza a instalação existente: assinatura de debug é diferente.
+      - name: Disponibilizar APK de teste local (NÃO INSTALAR SOBRE O ORIGINAL)
+        if: github.ref == 'refs/heads/acr-os-pro-local'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACR-OS-Pro-Local-DEBUG-NAO-ATUALIZA-ORIGINAL
+          path: ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
+
       # Só workflow_dispatch no branch main pode publicar um APK para atualização.
       # As credenciais e o fingerprint do certificado ORIGINAL são obrigatórios.
       - name: Compilar release não assinada
