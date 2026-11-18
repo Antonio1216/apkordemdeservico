@@ -34,8 +34,9 @@ on:
       - 'scripts/rhid-panel-v179.html'
       - 'scripts/add-finished-orders-v1711.py'
       - 'scripts/sign-android-update.sh'
+      - 'scripts/auditar-migracao-local.py'
   push:
-    branches: [main]
+    branches: [main, acr-os-pro-local]
     paths:
       - '.github/workflows/build-photo-fixed-apk.yml'
       - 'scripts/fix-photo-picker.py'
@@ -67,6 +68,7 @@ on:
       - 'scripts/rhid-v179.js'
       - 'scripts/rhid-panel-v179.html'
       - 'scripts/sign-android-update.sh'
+      - 'scripts/auditar-migracao-local.py'
   workflow_dispatch:
 
 permissions:
