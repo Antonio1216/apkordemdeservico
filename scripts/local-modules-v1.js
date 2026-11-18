@@ -22,9 +22,18 @@
     const data = await store.get('module:' + name);
     return data === null ? copy(defaults[name]) : data;
   }
+  const pending = new Map();
+  function serialize(name, operation) {
+    const previous = pending.get(name) || Promise.resolve();
+    const result = previous.catch(() => {}).then(operation);
+    pending.set(name, result);
+    result.finally(() => { if (pending.get(name) === result) pending.delete(name); }).catch(() => {});
+    return result;
+  }
   async function save(name, data, expectedRevision) {
     name = allowed(name);
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Dados locais inválidos.');
+    return serialize(name, async () => {
     const current = await read(name);
     if (expectedRevision !== undefined && expectedRevision !== current.revision) {
       const err = new Error('Os dados foram alterados. Atualize a tela e tente novamente.');
@@ -34,10 +43,11 @@
     const next = {...copy(data), revision: current.revision + 1};
     await store.set('module:' + name, next);
     return copy(next);
+    });
   }
   async function resetModule(name) {
     name = allowed(name);
-    await store.remove('module:' + name);
+    await serialize(name, () => store.remove('module:' + name));
   }
   Object.defineProperty(window, 'ACRLocalModules', {
     value: Object.freeze({read, save, resetModule}),
