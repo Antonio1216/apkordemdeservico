@@ -6,6 +6,8 @@ on:
       - 'scripts/gate-offline-release.py'
       - 'scripts/local-auth-prototype.js'
       - 'scripts/test-local-auth-prototype.cjs'
+      - 'scripts/migration-preflight.cjs'
+      - 'scripts/test-migration-preflight.cjs'
       - '.github/workflows/offline-readiness.yml'
   workflow_dispatch:
 permissions:
@@ -22,6 +24,8 @@ jobs:
         run: node --check scripts/local-auth-prototype.js
       - name: Confirmar bloqueio de provisionamento nao autenticado
         run: node scripts/test-local-auth-prototype.cjs
+      - name: Validar integridade das contas antes de migrar
+        run: node scripts/test-migration-preflight.cjs
       - name: Confirmar verificador de senhas
         run: node scripts/test-local-password.cjs
       - name: Confirmar gate de release existente
