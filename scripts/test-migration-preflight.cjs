@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');
+const {inspect}=require('./migration-preflight.cjs');
+const admin={login:'admin',perfil:'Administrador',active:true,hash:'hash-de-teste',salt:'sal-de-teste'};
+assert.equal(inspect({accounts:[admin]}).safeToMigrate,true);
+assert.equal(inspect({accounts:[]}).safeToMigrate,false);
+assert.equal(inspect({accounts:[{...admin,hash:null}]}).safeToMigrate,false);
+assert.equal(inspect({accounts:[admin,{...admin,perfil:'Técnico'}]}).safeToMigrate,false);
+assert.equal(inspect({accounts:[{...admin,active:false}]}).safeToMigrate,false);
+assert.equal(inspect(null).safeToMigrate,false);
+console.log('OK: preflight bloqueia dados incompletos, logins duplicados e ausência de administrador ativo.');
