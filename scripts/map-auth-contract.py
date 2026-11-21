@@ -9,18 +9,18 @@ html=(assets/'index.html').read_text(encoding='utf-8')
 app=(assets/'app.js').read_text(encoding='utf-8')
 def summarize(source):
     patterns={
-      'login_functions':r'\\b(?:async\\s+)?function\\s+(login|logout|request|reloadWorkspace|ready|saveUser|removeUser)\\b',
-      'api_calls':r'\\bfetch\\s*\\(|\\bXMLHttpRequest\\b',
+      'login_functions':r'\b(?:async\s+)?function\s+(login|logout|request|reloadWorkspace|ready|saveUser|removeUser)\b',
+      'api_calls':r'\bfetch\s*\(|\bXMLHttpRequest\b',
       'team_routes':r'/api/team/[a-zA-Z/-]+',
-      'browser_storage':r'\\b(?:localStorage|sessionStorage)\\.',
-      'auth_exports':r'\\b(?:window|globalThis)\\.OSAuth\\b',
+      'browser_storage':r'\b(?:localStorage|sessionStorage)\.',
+      'auth_exports':r'\b(?:window|globalThis)\.OSAuth\b',
     }
     result={}
     for label,pattern in patterns.items():
         found=[i for i,line in enumerate(source.splitlines(),1) if re.search(pattern,line)]
         result[label]={'count':len(found),'line_numbers':found[:100]}
     return result
-scripts=re.findall(r'<script[^>]+src=["\\']([^"\\']+)["\\']',html)
+scripts=re.findall(r"""<script[^>]+src=["']([^"']+)["']""", html)
 report={
  'authentication_source':'auth.js',
  'auth':summarize(auth),
