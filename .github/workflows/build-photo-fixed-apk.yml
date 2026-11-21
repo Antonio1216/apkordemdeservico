@@ -54,6 +54,7 @@ on:
       - 'scripts/test-local-orders.cjs'
       - 'scripts/local-orders-ui-v1.js'
       - 'scripts/local-registry-v1.js'
+      - 'scripts/local-registry-ui-v1.js'
       - 'scripts/test-local-registry.cjs'
       - 'scripts/local-first-run-ui.js'
       - 'scripts/add-local-first-run-ui.py'
@@ -112,6 +113,7 @@ on:
       - 'scripts/test-local-orders.cjs'
       - 'scripts/local-orders-ui-v1.js'
       - 'scripts/local-registry-v1.js'
+      - 'scripts/local-registry-ui-v1.js'
       - 'scripts/test-local-registry.cjs'
       - 'scripts/local-first-run-ui.js'
       - 'scripts/add-local-first-run-ui.py'
@@ -169,6 +171,7 @@ jobs:
           node scripts/test-local-orders.cjs
           node scripts/test-local-registry.cjs
           node --check ospro-eletrica-software/app/src/main/assets/local-registry.js
+          node --check ospro-eletrica-software/app/src/main/assets/local-registry-ui.js
           node --check ospro-eletrica-software/app/src/main/assets/local-orders.js
           node --check ospro-eletrica-software/app/src/main/assets/local-orders-ui.js
           node --check ospro-eletrica-software/app/src/main/assets/local-first-run.js
