@@ -331,6 +331,16 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+      # APK de teste separado, com applicationId próprio. Não substitui o original.
+      - name: Disponibilizar APK de teste ACR OS Pro Novo Local
+        if: github.ref == 'refs/heads/acr-os-pro-novo-local'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ACR-OS-Pro-Novo-Local-DEBUG-TESTE
+          path: ospro-eletrica-software/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
+
       # Só workflow_dispatch no branch main pode publicar um APK para atualização.
       # As credenciais e o fingerprint do certificado ORIGINAL são obrigatórios.
       - name: Compilar release não assinada
