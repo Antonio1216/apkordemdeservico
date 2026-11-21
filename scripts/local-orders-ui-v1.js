@@ -24,10 +24,24 @@
   const refresh=make('button','Atualizar lista');refresh.type='button';
   const message=make('p');message.setAttribute('role','status');message.setAttribute('aria-live','polite');
   const list=make('ul');let editing=null;
-  section.append(form,refresh,message,list);container.append(section);
+
+  // Evidências vinculadas à OS: no máximo quatro imagens, cada uma com GPS e horário.
+  const evidence=make('section');evidence.hidden=true;
+  evidence.append(make('h4','Fotos da OS (até 4)'));
+  const photoInput=make('input');photoInput.type='file';photoInput.accept='image/*';photoInput.setAttribute('aria-label','Adicionar foto da OS');
+  const photoMessage=make('p');photoMessage.setAttribute('role','status');
+  const gallery=make('div');evidence.append(photoInput,photoMessage,gallery);
+  const dbOpen=()=>new Promise((resolve,reject)=>{const req=indexedDB.open('acr-os-evidencias',1);req.onupgradeneeded=()=>req.result.createObjectStore('fotos',{keyPath:'id'});req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});
+  async function photos(){const db=await dbOpen();return new Promise((resolve,reject)=>{const tx=db.transaction('fotos','readonly');const req=tx.objectStore('fotos').getAll();req.onsuccess=()=>{db.close();resolve(req.result.filter(p=>p.os===editing))};req.onerror=()=>{db.close();reject(req.error)}})}
+  async function storePhoto(record,remove=false){const db=await dbOpen();return new Promise((resolve,reject)=>{const tx=db.transaction('fotos','readwrite');tx.objectStore('fotos')[remove?'delete':'put'](remove?record.id:record);tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>{db.close();reject(tx.error)}})}
+  function position(){return new Promise(resolve=>{if(!navigator.geolocation)return resolve(null);navigator.geolocation.getCurrentPosition(p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy}),()=>resolve(null),{enableHighAccuracy:true,timeout:10000})})}
+  function resize(file){return new Promise((resolve,reject)=>{const url=URL.createObjectURL(file),img=new Image();img.onload=()=>{const canvas=document.createElement('canvas'),scale=Math.min(1,1200/Math.max(img.width,img.height));canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);URL.revokeObjectURL(url);resolve(canvas.toDataURL('image/jpeg',0.7))};img.onerror=()=>{URL.revokeObjectURL(url);reject(Error('Foto inválida'))};img.src=url})}
+  async function showPhotos(){gallery.replaceChildren();if(!editing)return;const items=await photos();photoInput.disabled=items.length>=4;photoMessage.textContent=items.length+'/4 fotos';for(const p of items){const wrap=make('div'),img=make('img');img.src=p.image;img.alt='Foto da ordem de serviço';img.style.cssText='max-width:160px;display:block';const gps=p.gps?p.gps.latitude.toFixed(6)+', '+p.gps.longitude.toFixed(6):'GPS indisponível';const details=make('p',new Date(p.date).toLocaleString('pt-BR')+' | '+gps);const del=make('button','Excluir foto');del.type='button';del.onclick=async()=>{await storePhoto(p,true);await showPhotos()};wrap.append(img,details,del);gallery.append(wrap)}}
+  photoInput.addEventListener('change',async()=>{const file=photoInput.files?.[0];photoInput.value='';if(!file||!editing)return;try{if(!file.type.startsWith('image/'))throw Error('Arquivo não é uma imagem');if((await photos()).length>=4)throw Error('Limite de 4 fotos');photoMessage.textContent='Salvando foto...';const image=await resize(file),gps=await position();await storePhoto({id:crypto.randomUUID(),os:editing,image,gps,date:new Date().toISOString()});await showPhotos()}catch(error){photoMessage.textContent=error.message||'Falha ao salvar foto'}});
+  section.append(form,evidence,refresh,message,list);container.append(section);
   const api=globalThis.ACRLocalOrders;
   const values=()=>({title:fields.title.value,client:fields.client.value,description:fields.description.value,status:status.value});
-  function reset(){editing=null;form.reset();submit.textContent='Salvar OS local';cancel.hidden=true}
+  function reset(){editing=null;form.reset();submit.textContent='Salvar OS local';cancel.hidden=true;evidence.hidden=true}
   cancel.addEventListener('click',reset);
   async function reload(){
    const records=await api.list();list.replaceChildren();
@@ -36,7 +50,7 @@
     const edit=make('button','Editar');edit.type='button';
     edit.addEventListener('click',()=>{
      editing=record.id;for(const key of ['title','client','description'])fields[key].value=record[key]||'';
-     status.value=record.status;submit.textContent='Atualizar OS local';cancel.hidden=false;fields.title.focus();
+     status.value=record.status;submit.textContent='Atualizar OS local';cancel.hidden=false;evidence.hidden=false;showPhotos().catch(e=>{photoMessage.textContent=e.message});fields.title.focus();
     });
     item.append(edit);list.append(item);
    }
