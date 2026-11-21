@@ -62,7 +62,7 @@
   async function exportBackup() {
     return JSON.stringify({format: BACKUP_FORMAT, version: 1, exportedAt: new Date().toISOString(), records: await entries()});
   }
-  async function importBackup(json) {
+  function validateBackup(json) {
     const payload = typeof json === 'string' ? JSON.parse(json) : json;
     if (!payload || payload.format !== BACKUP_FORMAT || payload.version !== 1 || !Array.isArray(payload.records)) {
       throw new Error('Backup incompatível.');
@@ -75,6 +75,17 @@
       keys.add(key);
       return {key, value: structuredClone(row.value)};
     });
+    return records;
+  }
+  function previewBackup(json) {
+    const records = validateBackup(json);
+    const modules = records.filter(row => row.key.startsWith('module:')).map(row => row.key.slice(7));
+    return Object.freeze({recordCount: records.length, modules: Object.freeze(modules)});
+  }
+  async function importBackup(json, options = {}) {
+    // Restaurar substitui todos os registros. Exigir confirmação explícita do chamador.
+    if (options.confirmReplace !== true) throw new Error('Confirme a substituição dos dados antes de restaurar.');
+    const records = validateBackup(json);
     // A importação é atômica: se falhar, a transação é revertida.
     await transact('readwrite', store => {
       store.clear();
@@ -83,7 +94,7 @@
     return records.length;
   }
   Object.defineProperty(window, 'ACRLocalStore', {
-    value: Object.freeze({get, set, remove, entries, exportBackup, importBackup}),
+    value: Object.freeze({get, set, remove, entries, exportBackup, previewBackup, importBackup}),
     configurable: false, writable: false
   });
 })();
