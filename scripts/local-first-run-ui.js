@@ -32,12 +32,33 @@
       #acr-local-nav button{background:#e1eaf5;color:#174d7e;margin:0}
       #acr-local-nav button[aria-selected="true"]{background:#145d9d;color:white}
       #acr-local-login .acr-hidden{display:none!important}
+      #acr-local-login.acr-authenticated{padding:0!important;overflow:hidden}
+      #acr-local-login.acr-authenticated > h2,#acr-local-login.acr-authenticated > p{display:none}
+      #acr-local-login.acr-authenticated > form{padding:0 20px;margin:0}
+      #acr-local-login.acr-authenticated > form > label,#acr-local-login.acr-authenticated > form > button[type="submit"],#acr-local-login.acr-authenticated > form > pre{display:none!important}
+      #acr-local-login.acr-authenticated > form > p[role="status"]{display:none}
+      #acr-local-login.acr-authenticated > form > button{background:transparent;color:#42617e;font-size:13px;padding:6px 8px;min-height:36px}
+      #acr-local-header{background:linear-gradient(115deg,#08345c,#1168a7);color:white;padding:24px 22px}
+      #acr-local-header strong{font-size:22px;letter-spacing:-.5px}
+      #acr-local-header small{display:block;margin-top:4px;color:#d6eafa;font-size:13px}
+      #acr-local-nav{padding:12px 18px;margin:0!important;background:#fff;border-bottom:1px solid #e5edf4;display:grid!important;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:8px!important}
+      #acr-local-nav button{border:1px solid #d7e4f0!important;border-radius:11px!important;padding:10px!important;text-align:center;font-size:13px!important}
+      #acr-local-login section[id^="acr-local-"]{margin:16px 18px!important;padding:18px!important;background:#fff!important;border:1px solid #e5edf4!important;border-radius:14px!important}
+      #acr-local-login.acr-authenticated{background:#f5f8fc!important}
+      #acr-local-login section h3{margin:0 0 12px!important}
+      #acr-local-login label{font-weight:600;font-size:13px;color:#37516a}
+      #acr-local-login button{transition:background .15s}
+      #acr-local-login ul{list-style:none;padding:0}
+      #acr-local-login li{padding:12px;margin:8px 0;background:#f2f6fb;border-radius:10px}
+      #acr-local-login input:focus,#acr-local-login select:focus,#acr-local-login textarea:focus{outline:2px solid #3889c8;outline-offset:1px}
+      #acr-local-registry > section+section{border-top:1px solid #e4edf5;padding-top:18px;margin-top:22px}
+      #acr-local-login [hidden],#acr-local-setup [hidden]{display:none!important}
       @media(max-width:520px){#acr-local-login,#acr-local-setup{margin:12px auto!important}#acr-local-login button{font-size:14px}}
     `;
     document.head.append(style);
   }
   function setupNavigation(section) {
-    const targets=[['acr-local-orders','Ordens de serviço'],['acr-local-registry','Clientes e equipamentos']];
+    const targets=[['acr-local-orders','Ordens de serviço'],['acr-local-registry','Cadastros']];
     const available=targets.filter(([id])=>document.getElementById(id));
     if(!available.length)return;
     const nav=node('nav',{id:'acr-local-nav','aria-label':'Seções locais'});
@@ -87,7 +108,11 @@
       status.textContent='Verificando credenciais locais…';
       try {
         const user=await session.signIn(login.value,secret.value);
-        status.textContent='Sessão local autenticada: '+user.login+'. Integração dos módulos ainda pendente.';
+        status.textContent='Sessão local autenticada.';
+        section.classList.add('acr-authenticated');
+        const header=node('header',{id:'acr-local-header'});
+        header.append(node('strong',{},'ACR OS Pro Local'),node('small',{},'Painel local • '+user.login));
+        section.prepend(header);
         secret.value='';
         button.hidden=true;logout.hidden=false;inspect.hidden=false;
         if(session.hasPermission('ordens'))globalThis.ACRLocalOrdersUI?.mount(section);
@@ -110,6 +135,8 @@
       globalThis.ACRLocalOrdersUI?.unmount();
       globalThis.ACRLocalRegistryUI?.unmount();
       document.getElementById('acr-local-nav')?.remove();
+      document.getElementById('acr-local-header')?.remove();
+      section.classList.remove('acr-authenticated');
       login.value='';secret.value='';
       button.hidden=false;logout.hidden=true;inspect.hidden=true;report.textContent='';
       status.textContent='Sessão local encerrada.';
