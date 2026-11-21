@@ -13,6 +13,7 @@
     users: {revision: 0, users: []}
   });
   const copy = value => structuredClone(value);
+  const validRevision = revision => Number.isSafeInteger(revision) && revision >= 0;
   const allowed = name => {
     if (!Object.prototype.hasOwnProperty.call(defaults, name)) throw new Error('Módulo local desconhecido.');
     return name;
@@ -20,7 +21,11 @@
   async function read(name) {
     name = allowed(name);
     const data = await store.get('module:' + name);
-    return data === null ? copy(defaults[name]) : data;
+    if (data === null) return copy(defaults[name]);
+    if (!data || typeof data !== 'object' || Array.isArray(data) || !validRevision(data.revision)) {
+      throw new Error('Dados locais corrompidos: ' + name + '. Restaure um backup válido.');
+    }
+    return copy(data);
   }
   const pending = new Map();
   function serialize(name, operation) {
@@ -33,6 +38,7 @@
   async function save(name, data, expectedRevision) {
     name = allowed(name);
     if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Dados locais inválidos.');
+    if (expectedRevision !== undefined && !validRevision(expectedRevision)) throw new Error('Revisão local inválida.');
     return serialize(name, async () => {
     const current = await read(name);
     if (expectedRevision !== undefined && expectedRevision !== current.revision) {
