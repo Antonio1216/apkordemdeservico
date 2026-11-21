@@ -24,15 +24,6 @@ jobs:
           base64 --decode scripts/ospro-v1.7-overlay.tgz.b64 > /tmp/v17.tgz
           echo '4d9776c030443ce84ca5fced0794319846e27588b37107a6926e71feca6998d8  /tmp/v17.tgz' | sha256sum -c -
           tar -xzf /tmp/v17.tgz -C ospro-eletrica-software
-          python scripts/add-user-permissions-v174.py ospro-eletrica-software
-          python scripts/add-catalog-v175.py ospro-eletrica-software
-          python scripts/add-travel-v176.py ospro-eletrica-software
-          python scripts/add-reports-v177.py ospro-eletrica-software
-          python scripts/add-licenses-v178.py ospro-eletrica-software
-          python scripts/add-rhid-v179.py ospro-eletrica-software
-          python scripts/add-recovery-v180.py ospro-eletrica-software
-          python scripts/add-service-desk-v181.py ospro-eletrica-software
-          python scripts/add-finished-orders-v1711.py ospro-eletrica-software
-          python scripts/add-local-store-v1.py ospro-eletrica-software
-      - name: Auditar login sem imprimir credenciais
-        run: python scripts/auditar-login-local.py ospro-eletrica-software
+          # Auditoria somente leitura: não aplicar patches de versões posteriores.
+          # O auth.js original já permite mapear as dependências remotas.
+          python scripts/auditar-login-local.py ospro-eletrica-software
