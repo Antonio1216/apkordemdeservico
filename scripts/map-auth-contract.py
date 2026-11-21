@@ -20,10 +20,17 @@ def summarize(source):
         found=[i for i,line in enumerate(source.splitlines(),1) if re.search(pattern,line)]
         result[label]={'count':len(found),'line_numbers':found[:100]}
     return result
+def declarations(source):
+    # Function names and line numbers only; never include function bodies.
+    pattern = re.compile(r'\\b(?:async\\s+)?function\\s+([A-Za-z_$][\\w$]*)\\s*\\(')
+    return [{'name':m.group(1),'line':source.count('\\n',0,m.start())+1}
+            for m in pattern.finditer(source)][:150]
+
 scripts=re.findall(r"""<script[^>]+src=["']([^"']+)["']""", html)
 report={
  'authentication_source':'auth.js',
  'auth':summarize(auth),
+ 'auth_function_declarations':declarations(auth),
  'app':summarize(app),
  'script_load_order':[x for x in scripts if x in ('local-store.js','local-modules.js','senha-local.js','local-auth-prototype.js','auth.js','app.js')],
  'offline_login_implemented':False,
