@@ -37,6 +37,7 @@ on:
       - 'scripts/auditar-migracao-local.py'
       - 'scripts/local-store-v1.js'
       - 'scripts/senha-local-v1.js'
+      - 'scripts/local-finance-ui-v1.js'
       - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
       - 'scripts/local-auth-prototype.js'
@@ -171,6 +172,7 @@ jobs:
           node scripts/test-local-orders.cjs
           node scripts/test-local-registry.cjs
           node --check ospro-eletrica-software/app/src/main/assets/local-registry.js
+          node --check ospro-eletrica-software/app/src/main/assets/local-finance-ui.js
           node --check ospro-eletrica-software/app/src/main/assets/local-registry-ui.js
           node --check ospro-eletrica-software/app/src/main/assets/local-orders.js
           node --check ospro-eletrica-software/app/src/main/assets/local-orders-ui.js
