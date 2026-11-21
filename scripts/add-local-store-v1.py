@@ -20,12 +20,12 @@ anchor = '<script src="auth.js" defer></script>'
 if anchor not in markup:
     raise SystemExit('Script auth.js não encontrado; integração interrompida.')
 modules = ['local-store.js', 'local-modules.js', 'senha-local.js', 'local-auth-prototype.js']
-# Reconciliar instalação parcial sem duplicar scripts.
-import re
+# Reconciliar instalação parcial sem regex ou scripts duplicados.
 for module in modules:
-    markup = re.sub(r'<script\\s+src=["\\']' + re.escape(module) + r'["\\']\\s+defer\\s*></script>\\s*', '', markup)
-tags = '\\n'.join('  <script src="' + module + '" defer></script>' for module in modules)
-markup = markup.replace(anchor, tags + '\\n  ' + anchor, 1)
+    tag = '<script src="' + module + '" defer></script>'
+    markup = markup.replace(tag, '')
+tags = '\n'.join('  <script src="' + module + '" defer></script>' for module in modules)
+markup = markup.replace(anchor, tags + '\n  ' + anchor, 1)
 html.write_text(markup, encoding='utf-8')
 if any(markup.count('src="' + module + '"') != 1 for module in modules):
     raise SystemExit('Módulos locais duplicados ou ausentes.')
