@@ -21,6 +21,11 @@ assert "Provisionamento bloqueado" in prototype, "Provisionamento inseguro não 
 session = (assets / 'local-session.js').read_text(encoding='utf-8')
 assert 'ACRLocalAuthPrototype' in session and 'ACRLocalSession' in session, "Sessão local não está conectada ao protótipo"
 assert 'onrender.com' not in session.lower() and 'fetch(' not in session, "Sessão local não pode depender de rede"
+ui_path = assets / 'local-first-run-ui.js'
+if ui_path.exists():
+    ui = ui_path.read_text(encoding='utf-8')
+    assert 'ACRLocalSession' in ui and 'session.signIn' in ui and 'session.signOut' in ui, 'Tela de login local incompleta'
+    assert html.count('src="local-first-run-ui.js"') == 1, 'Tela de login local duplicada'
 assert 'indexedDB.open' in js, "Persistência IndexedDB ausente"
 assert "db.transaction(STORE, mode)" in js, "Transações ausentes"
 assert "tx.oncomplete" in js, "Confirmação de gravação ausente"
