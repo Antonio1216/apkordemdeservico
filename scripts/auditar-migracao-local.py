@@ -26,3 +26,4 @@ for file in sorted(assets.rglob("*")):
             print(f"{file.relative_to(root)}:{number}: {', '.join(hits)}")
 print(f"Total de linhas que exigem revisão: {count}")
 print("Relatório de diagnóstico: NÃO significa que o APK já funciona offline.")
+print("STATUS OFFLINE: NÃO VALIDADO — autenticação, API e fluxos de dados ainda precisam de testes funcionais.")
