@@ -1,0 +1,26 @@
+'use strict';
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const vm=require('node:vm');
+const {webcrypto}=require('node:crypto');
+const source=fs.readFileSync(require('node:path').join(__dirname,'local-password-v1.js'),'utf8');
+const context={crypto:webcrypto,TextEncoder,Uint8Array,Array,Error,Object,parseInt,globalThis:null};
+context.globalThis=context;
+vm.runInNewContext(source,context);
+(async()=>{
+ const auth=context.ACRLocalPassword;
+ const password='SenhaLocalTeste#2026';
+ const record=await auth.createVerifier(password);
+ assert.equal(record.algorithm,'PBKDF2-SHA256');
+ assert.equal(record.iterations,310000);
+ assert.equal(record.salt.length,32);
+ assert.equal(record.hash.length,64);
+ assert.equal(await auth.verify(password,record),true);
+ assert.equal(await auth.verify('SenhaErrada',record),false);
+ assert.equal(await auth.verify(password,{...record,hash:'00'.repeat(32)}),false);
+ assert.equal(await auth.verify(password,{...record,iterations:1}),false);
+ await assert.rejects(auth.createVerifier('curta'),/12 caracteres/);
+ const another=await auth.createVerifier(password);
+ assert.notEqual(another.salt,record.salt);
+ console.log('OK: derivação PBKDF2, sal aleatório, verificação e rejeição de registros inválidos.');
+})().catch(error=>{console.error(error);process.exitCode=1;});
