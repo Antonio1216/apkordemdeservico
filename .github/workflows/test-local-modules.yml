@@ -1,0 +1,21 @@
+name: Testar repositorios locais
+on:
+  push:
+    branches: [acr-os-pro-local]
+    paths:
+      - 'scripts/local-modules-v1.js'
+      - 'scripts/test-local-modules-runtime.cjs'
+      - '.github/workflows/test-local-modules.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  teste-local:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Testar persistencia simulada e conflitos de revisao
+        run: node scripts/test-local-modules-runtime.cjs
