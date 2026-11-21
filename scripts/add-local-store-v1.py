@@ -13,7 +13,7 @@ if not source.is_file() or not html.is_file():
     raise SystemExit('Fontes do APK não encontradas.')
 shutil.copyfile(source, target)
 shutil.copyfile(Path(__file__).with_name('local-modules-v1.js'), assets / 'local-modules.js')
-shutil.copyfile(Path(__file__).with_name('senha-local-v1.js'), assets / 'senha-local.js')
+shutil.copyfile(Path(__file__).with_name('local-password-v1.js'), assets / 'senha-local.js')
 markup = html.read_text(encoding='utf-8')
 tag = '  <script src="local-store.js" defer></script>\n  <script src="local-modules.js" defer></script>\n  <script src="senha-local.js" defer></script>'
 if 'src="local-modules.js"' not in markup:
