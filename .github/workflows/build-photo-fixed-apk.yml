@@ -52,6 +52,7 @@ on:
       - 'scripts/test-local-first-run.cjs'
       - 'scripts/local-orders-v1.js'
       - 'scripts/test-local-orders.cjs'
+      - 'scripts/local-orders-ui-v1.js'
       - 'scripts/local-first-run-ui.js'
       - 'scripts/add-local-first-run-ui.py'
       - 'scripts/test-local-store-integration.py'
@@ -107,6 +108,7 @@ on:
       - 'scripts/test-local-first-run.cjs'
       - 'scripts/local-orders-v1.js'
       - 'scripts/test-local-orders.cjs'
+      - 'scripts/local-orders-ui-v1.js'
       - 'scripts/local-first-run-ui.js'
       - 'scripts/add-local-first-run-ui.py'
       - 'scripts/test-local-store-integration.py'
@@ -162,6 +164,7 @@ jobs:
           node scripts/test-local-first-run.cjs
           node scripts/test-local-orders.cjs
           node --check ospro-eletrica-software/app/src/main/assets/local-orders.js
+          node --check ospro-eletrica-software/app/src/main/assets/local-orders-ui.js
           node --check ospro-eletrica-software/app/src/main/assets/local-first-run.js
           if [ "${GITHUB_REF}" = 'refs/heads/acr-os-pro-novo-local' ]; then
             node --check ospro-eletrica-software/app/src/main/assets/local-first-run-ui.js
