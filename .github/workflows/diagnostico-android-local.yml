@@ -1,0 +1,33 @@
+name: Diagnostico Android para migracao local
+on:
+  workflow_dispatch:
+  push:
+    branches: [migracao-armazenamento-local]
+    paths:
+      - .github/workflows/diagnostico-android-local.yml
+permissions:
+  contents: read
+jobs:
+  inspecionar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Identificar fontes e configuracoes Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ospro-inspecao
+          unzip -q OSPro-Eletrica-Software-Fonte.zip -d /tmp/ospro-inspecao
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('/tmp/ospro-inspecao')
+          files=list(root.rglob('*'))
+          print('Projeto Android detectado:', any(p.name=='build.gradle.kts' for p in files))
+          print('Arquivos de interface:', sum(p.suffix in ('.html','.js') for p in files if p.is_file()))
+          print('Arquivos Java/Kotlin:', sum(p.suffix in ('.java','.kt') for p in files if p.is_file()))
+          print('Manifestos:', sum(p.name=='AndroidManifest.xml' for p in files))
+          print('Pontos de inspeção (sem expor conteúdo ou credenciais):')
+          for p in files:
+              if p.is_file() and p.name in ('app.js','auth.js','AndroidManifest.xml','build.gradle.kts'):
+                  print(' -',p.relative_to(root))
+          PY
