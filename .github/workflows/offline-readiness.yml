@@ -1,0 +1,33 @@
+name: Auditoria de prontidao offline
+on:
+  push:
+    branches: [acr-os-pro-local]
+    paths:
+      - 'scripts/gate-offline-release.py'
+      - 'scripts/local-auth-prototype.js'
+      - 'scripts/test-local-auth-prototype.cjs'
+      - '.github/workflows/offline-readiness.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar sintaxe do prototipo
+        run: node --check scripts/local-auth-prototype.js
+      - name: Confirmar bloqueio de provisionamento nao autenticado
+        run: node scripts/test-local-auth-prototype.cjs
+      - name: Confirmar verificador de senhas
+        run: node scripts/test-local-password.cjs
+      - name: Confirmar gate de release existente
+        run: python -m py_compile scripts/gate-offline-release.py
+      - name: Registrar pendencias de producao
+        run: |
+          echo 'Autenticacao offline nao esta conectada a tela Android.'
+          echo 'Provisionamento de usuarios permanece bloqueado ate validacao segura.'
+          echo 'Migracao de dados e testes em dispositivo ainda sao obrigatorios.'
