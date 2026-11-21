@@ -18,6 +18,9 @@ tag = '  <script src="local-store.js" defer></script>\n  <script src="local-modu
 if 'src="local-modules.js"' not in markup:
     if '</body>' not in markup:
         raise SystemExit('index.html sem fechamento de body.')
-    markup = markup.replace('</body>', tag + '\n</body>', 1)
+    anchor = '<script src="auth.js" defer></script>'
+    if anchor not in markup:
+        raise SystemExit('Script auth.js não encontrado para garantir a ordem de carregamento.')
+    markup = markup.replace(anchor, tag + '\n  ' + anchor, 1)
     html.write_text(markup, encoding='utf-8')
-print('Camada local instalada; módulos e autenticação ainda precisam de adaptação.')
+print('Camada local instalada antes da autenticação; integração de APIs pendente.')
