@@ -26,6 +26,11 @@ if ui_path.exists():
     ui = ui_path.read_text(encoding='utf-8')
     assert 'ACRLocalSession' in ui and 'session.signIn' in ui and 'session.signOut' in ui, 'Tela de login local incompleta'
     assert html.count('src="local-first-run-ui.js"') == 1, 'Tela de login local duplicada'
+assert html.count('src="local-diagnostics.js"') == 1, 'Diagnóstico local não carregado exatamente uma vez'
+assert html.index('src="local-session.js"') < html.index('src="local-diagnostics.js"') < html.index('src="auth.js"'), 'Ordem de carregamento do diagnóstico incorreta'
+diagnostics = (assets / 'local-diagnostics.js').read_text(encoding='utf-8')
+assert 'session.hasPermission' in diagnostics and 'modules.read' in diagnostics, 'Consulta local sem autorização'
+assert 'onrender.com' not in diagnostics.lower() and 'fetch(' not in diagnostics, 'Consulta local usa rede'
 assert 'indexedDB.open' in js, "Persistência IndexedDB ausente"
 assert "db.transaction(STORE, mode)" in js, "Transações ausentes"
 assert "tx.oncomplete" in js, "Confirmação de gravação ausente"
