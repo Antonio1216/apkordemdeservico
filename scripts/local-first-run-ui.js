@@ -17,9 +17,15 @@
     if(document.getElementById('acr-local-style'))return;
     const style=node('style',{id:'acr-local-style'});
     style.textContent=`
-      body{margin:0!important;background:#eef3f9!important;color:#162e49!important;font-family:system-ui,Arial,sans-serif!important}
+      html,body{margin:0!important;min-height:100%!important;background:#eef3f9!important;color:#162e49!important;font-family:system-ui,Arial,sans-serif!important}
+      #acr-local-login,#acr-local-setup{position:fixed!important;inset:0!important;z-index:2147483647!important;overflow-y:auto!important;overscroll-behavior:contain!important;width:100%!important;max-width:none!important;min-height:100dvh!important;max-height:100dvh!important;margin:0!important;border-radius:0!important;box-sizing:border-box!important;background:#eef3f9!important}
+      #acr-local-login::before,#acr-local-setup::before{content:"";position:fixed;inset:0;z-index:-1;background:#eef3f9}
+      #acr-local-login:not(.acr-authenticated),#acr-local-setup{padding:clamp(20px,5vw,36px)!important}
+      #acr-local-login:not(.acr-authenticated)>h2,#acr-local-login:not(.acr-authenticated)>p,#acr-local-login:not(.acr-authenticated)>form,#acr-local-setup>h2,#acr-local-setup>p,#acr-local-setup>form{max-width:480px;margin-left:auto;margin-right:auto}
+      #acr-local-login.acr-authenticated{padding:0!important}
+      #acr-local-login.acr-authenticated>header,#acr-local-login.acr-authenticated>nav,#acr-local-login.acr-authenticated>section,#acr-local-login.acr-authenticated>form{max-width:900px;margin-left:auto!important;margin-right:auto!important}
       body > :not(script):not(style):not(#acr-local-login):not(#acr-local-setup){display:none!important}
-      #acr-local-login,#acr-local-setup{box-sizing:border-box!important;width:min(100% - 24px,900px)!important;max-width:900px!important;margin:24px auto!important;padding:clamp(16px,4vw,32px)!important;border:0!important;border-radius:20px!important;box-shadow:0 12px 32px #16395718!important;background:white!important;color:#162e49!important}
+      #acr-local-login,#acr-local-setup{border:0!important;box-shadow:none!important;color:#162e49!important}
       #acr-local-login h2,#acr-local-setup h2{margin:0 0 10px;font-size:clamp(22px,4vw,30px);color:#124c86}
       #acr-local-login h3{font-size:19px;color:#124c86}
       #acr-local-login input,#acr-local-login textarea,#acr-local-login select,#acr-local-setup input{min-height:44px;border:1px solid #b7c9da;border-radius:9px;background:#fff;color:#152c42;font-size:16px;padding:10px;max-width:100%}
@@ -54,7 +60,7 @@
       #acr-local-login input:focus,#acr-local-login select:focus,#acr-local-login textarea:focus{outline:2px solid #3889c8;outline-offset:1px}
       #acr-local-registry > section+section{border-top:1px solid #e4edf5;padding-top:18px;margin-top:22px}
       #acr-local-login [hidden],#acr-local-setup [hidden]{display:none!important}
-      @media(max-width:520px){#acr-local-login,#acr-local-setup{margin:12px auto!important}#acr-local-login button{font-size:14px}}
+      @media(max-width:520px){#acr-local-login button{font-size:14px}#acr-local-login section[id^="acr-local-"]{margin:10px!important;padding:14px!important}}
     `;
     document.head.append(style);
   }
@@ -78,6 +84,7 @@
     if (document.getElementById('acr-local-login')) return;
     const session=globalThis.ACRLocalSession;
     if (!session) throw Error('Sessão local indisponível.');
+    document.getElementById('acr-local-setup')?.remove();
     const section=node('section',{id:'acr-local-login','aria-label':'Login local independente'});
     section.style.cssText='max-width:440px;margin:16px auto;padding:20px;border:2px solid #245d92;border-radius:12px;background:#fff;color:#172b4d;position:relative;z-index:20';
     section.append(node('h2',{},'Entrar no ACR OS Pro Local'));
@@ -149,7 +156,7 @@
     const setup=globalThis.ACRLocalFirstRun;
     if (!setup) return;
     const isFirstRun = await setup.needsSetup();
-    if (!isFirstRun) { renderLocalLogin(); return; }
+    if (!isFirstRun) { document.getElementById('acr-local-setup')?.remove(); renderLocalLogin(); return; }
     const section=node('section',{id:'acr-local-setup','aria-label':'Configurar administrador local'});
     section.style.cssText='max-width:440px;margin:16px auto;padding:20px;border:2px solid #245d92;border-radius:12px;background:#fff;color:#172b4d;position:relative;z-index:20';
     const title=node('h2',{},'Configurar ACR OS Pro Local');
