@@ -17,18 +17,10 @@ for(const name of ['local-password-v1.js','local-auth-prototype.js']) {
 (async()=>{
  const auth=context.ACRLocalAuthPrototype;
  const user={login:'tecnico.teste',perfil:'Tecnico',permissions:{ordens:true,financeiro:false}};
- await assert.rejects(auth.provisionVerifiedUser(user,'SenhaDeTeste#2026',false),/não autorizada/);
+ await assert.rejects(auth.provisionVerifiedUser(user,'SenhaDeTeste#2026',false),/bloqueado/);
+ await assert.rejects(auth.provisionVerifiedUser(user,'SenhaDeTeste#2026',true),/bloqueado/);
  await assert.rejects(auth.authenticate(user.login,'SenhaDeTeste#2026'),/inválidos/);
- await auth.provisionVerifiedUser(user,'SenhaDeTeste#2026',true);
- await assert.rejects(auth.provisionVerifiedUser(user,'SenhaDeTeste#2026',true),/já cadastrado/);
- const result=await auth.authenticate(' TECNICO.TESTE ','SenhaDeTeste#2026');
- assert.equal(result.login,'tecnico.teste');
- assert.equal(result.permissions.ordens,true);
- assert.equal(result.permissions.financeiro,false);
- await assert.rejects(auth.authenticate(user.login,'SenhaErrada#2026'),/inválidos/);
- for(let i=0;i<3;i++) await assert.rejects(auth.authenticate(user.login,'errada'),/inválidos/);
- await assert.rejects(auth.authenticate(user.login,'errada'),/inválidos/);
- await assert.rejects(auth.authenticate(user.login,'SenhaDeTeste#2026'),/Aguarde/);
- console.log('OK: provisionamento explícito, credenciais, permissões, duplicidade e bloqueio temporário.');
+ assert.equal(records.size,0,'Nenhuma conta deve ser criada sem migração autenticada');
+ console.log('OK: provisionamento inseguro bloqueado; nenhuma conta criada.');
  console.log('PROTÓTIPO: não integrado ao login Android e não adequado para autorização de produção.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
