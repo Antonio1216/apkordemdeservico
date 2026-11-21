@@ -10,8 +10,12 @@ js = (assets / "local-store.js").read_text(encoding="utf-8")
 assert html.count('src="local-store.js"') == 1, "Script local não carregado exatamente uma vez"
 assert html.count('src="senha-local.js"') == 1, "Verificador local não carregado exatamente uma vez"
 assert (assets / 'senha-local.js').is_file(), "Arquivo de senha local ausente"
+assert html.count('src="local-auth-prototype.js"') == 1, "Protótipo de autenticação local deve carregar exatamente uma vez"
+assert (assets / 'local-auth-prototype.js').is_file(), "Protótipo de autenticação local ausente"
 assert 'src="auth.js"' in html, "Fluxo de autenticação original ausente"
-assert html.index('src="local-store.js"') < html.index('src="local-modules.js"') < html.index('src="senha-local.js"') < html.index('src="auth.js"'), "Armazenamento local precisa iniciar antes do login"
+assert html.index('src="local-store.js"') < html.index('src="local-modules.js"') < html.index('src="senha-local.js"') < html.index('src="local-auth-prototype.js"') < html.index('src="auth.js"'), "Armazenamento local precisa iniciar antes do login"
+prototype = (assets / 'local-auth-prototype.js').read_text(encoding='utf-8')
+assert "Provisionamento bloqueado" in prototype, "Provisionamento inseguro não pode ser liberado"
 assert 'indexedDB.open' in js, "Persistência IndexedDB ausente"
 assert "db.transaction(STORE, mode)" in js, "Transações ausentes"
 assert "tx.oncomplete" in js, "Confirmação de gravação ausente"
