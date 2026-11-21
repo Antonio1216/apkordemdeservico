@@ -38,6 +38,7 @@
       #acr-local-login.acr-authenticated > form > label,#acr-local-login.acr-authenticated > form > button[type="submit"],#acr-local-login.acr-authenticated > form > pre{display:none!important}
       #acr-local-login.acr-authenticated > form > p[role="status"]{display:none}
       #acr-local-login.acr-authenticated > form > button{background:transparent;color:#42617e;font-size:13px;padding:6px 8px;min-height:36px}
+      #acr-local-login.acr-authenticated > form > button:nth-of-type(3){display:none!important}
       #acr-local-header{background:linear-gradient(115deg,#08345c,#1168a7);color:white;padding:24px 22px}
       #acr-local-header strong{font-size:22px;letter-spacing:-.5px}
       #acr-local-header small{display:block;margin-top:4px;color:#d6eafa;font-size:13px}
