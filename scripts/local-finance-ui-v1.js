@@ -8,6 +8,29 @@
  const api=()=>globalThis.ACRLocalModules;
  async function read(){const w=await api().read('workspace');return {w,items:Array.isArray(w.finance)?w.finance:[]}}
  async function write(change){for(let attempt=0;attempt<3;attempt++){const {w,items}=await read();const next=change(items);try{await api().save('workspace',{...w,finance:next},w.revision);return}catch(e){if(e.status!==409||attempt===2)throw e}}}
+
+ const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const localStamp=iso=>new Date(iso).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'medium'});
+ function locationNow(){return new Promise(resolve=>{
+  if(!navigator.geolocation){resolve(null);return}
+  navigator.geolocation.getCurrentPosition(p=>resolve({latitude:p.coords.latitude,longitude:p.coords.longitude,accuracy:p.coords.accuracy}),()=>resolve(null),{enableHighAccuracy:true,timeout:12000,maximumAge:0});
+ })}
+ function receiptHtml(record){
+  const r=record.receipt,where=r.location
+   ?r.location.latitude.toFixed(6)+', '+r.location.longitude.toFixed(6)+' (precisão aproximada: '+Math.round(r.location.accuracy)+' m)'
+   :'Localização indisponível ou não autorizada';
+  const row=(label,value)=>'<p><strong>'+label+':</strong> '+escapeHtml(value)+'</p>';
+  return '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Comprovante de recebimento</title><style>body{font:16px system-ui,Arial;max-width:720px;margin:36px auto;padding:24px;color:#18334b}h1{color:#145d9d;border-bottom:3px solid #145d9d;padding-bottom:12px}p{line-height:1.5}small{color:#526b80}@media print{body{margin:0;padding:12mm}}</style></head><body><h1>ACR OS Pro — Comprovante de recebimento</h1>'
+  +row('Identificador',record.id)+row('Descrição',record.description)+row('Categoria',record.category||'Não informada')
+  +row('Valor recebido',money(record.cents))+row('Data do lançamento',record.date.split('-').reverse().join('/'))
+  +row('Data e hora do comprovante',localStamp(r.createdAt))+row('Localização (GPS)',where)
+  +'<p><strong>Situação:</strong> Recebido</p><small>Comprovante gerado pelo aplicativo a partir de lançamento registrado localmente. Data e hora dependem do relógio do dispositivo; coordenadas dependem da permissão de localização. Não equivale a comprovante bancário ou fiscal.</small></body></html>';
+ }
+ function downloadReceipt(record){
+  const blob=new Blob([receiptHtml(record)],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob),a=el('a');a.href=url;a.download='comprovante-recebimento-'+record.id+'.html';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+ }
  function mount(parent){
   if(document.getElementById('acr-local-finance'))return;
   const section=el('section');section.id='acr-local-finance';section.append(el('h3','Financeiro independente'));
@@ -41,12 +64,28 @@
     const edit=el('button','Editar'),remove=el('button','Excluir');edit.type=remove.type='button';
     edit.onclick=()=>{editing=record.id;for(const k of ['date','type','description','category','status'])fields[k].value=record[k]||'';fields.amount.value=(record.cents/100).toFixed(2);save.textContent='Atualizar lançamento';cancel.hidden=false;fields.description.focus()};
     remove.onclick=async()=>{if(!confirm('Excluir este lançamento?'))return;try{await write(a=>a.filter(x=>x.id!==record.id));await reload()}catch(e){message.textContent=e.message}};
-    li.append(edit,remove);list.append(li);
+    li.append(edit,remove);
+    if(record.type==='receita'&&record.status==='pago'){
+     const receipt=el('button',record.receipt?'Baixar comprovante':'Gerar comprovante');receipt.type='button';
+     receipt.onclick=async()=>{receipt.disabled=true;message.textContent='Preparando comprovante e consultando GPS…';try{
+      let saved=record;
+      if(!record.receipt){
+       const createdAt=new Date().toISOString(),location=await locationNow();
+       await write(items=>items.map(x=>x.id===record.id&&x.type==='receita'&&x.status==='pago'?{...x,receipt:x.receipt||{createdAt,location}}:x));
+       const fresh=await read();saved=fresh.items.find(x=>x.id===record.id);
+      }
+      if(!saved?.receipt)throw Error('Recebimento não disponível para comprovante.');
+      downloadReceipt(saved);await reload();
+     }catch(e){message.textContent=e.message||'Falha ao gerar comprovante.'}finally{receipt.disabled=false}};
+     li.append(receipt);
+    }
+    list.append(li);
    }
    message.textContent=items.length+' lançamento(s) registrado(s).';
   }
   form.onsubmit=async event=>{event.preventDefault();save.disabled=true;try{
    const record={id:editing||crypto.randomUUID(),date:fields.date.value,type:fields.type.value,description:fields.description.value.trim(),category:fields.category.value.trim(),cents:cents(fields.amount.value),status:fields.status.value};
+   if(editing){const old=(await read()).items.find(x=>x.id===editing);if(old?.receipt&&old.type==='receita'&&old.status==='pago'&&record.type==='receita'&&record.status==='pago')record.receipt=old.receipt;}
    if(!safeDate(record.date)||!record.description)throw Error('Preencha data e descrição válidas.');
    await write(items=>editing?items.map(x=>x.id===editing?record:x):[...items,record]);reset();await reload();
   }catch(e){message.textContent=e.message||'Falha ao salvar.'}finally{save.disabled=false}};
