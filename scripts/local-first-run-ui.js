@@ -35,7 +35,11 @@
     const logout=node('button',{type:'button'},'Sair da sessão local');
     logout.hidden=true;
     const status=node('p',{role:'status','aria-live':'polite'});
-    form.append(button,logout,status);
+    const inspect=node('button',{type:'button'},'Consultar dados locais');
+    inspect.hidden=true;
+    const report=node('pre',{'aria-live':'polite'});
+    report.style.cssText='white-space:pre-wrap;overflow-wrap:anywhere';
+    form.append(button,logout,inspect,status,report);
     section.append(form);
     document.body.prepend(section);
     form.addEventListener('submit',async event=>{
@@ -46,15 +50,23 @@
         const user=await session.signIn(login.value,secret.value);
         status.textContent='Sessão local autenticada: '+user.login+'. Integração dos módulos ainda pendente.';
         secret.value='';
-        button.hidden=true;logout.hidden=false;
+        button.hidden=true;logout.hidden=false;inspect.hidden=false;
       } catch(error) {
         status.textContent=error?.message||'Não foi possível autenticar.';
       } finally {button.disabled=false;}
     });
+    inspect.addEventListener('click',async()=>{
+      inspect.disabled=true;
+      try {
+        const summary=await globalThis.ACRLocalDiagnostics.snapshot();
+        report.textContent=JSON.stringify(summary,null,2);
+      } catch(error) {report.textContent=error?.message||'Consulta indisponível.';}
+      finally {inspect.disabled=false;}
+    });
     logout.addEventListener('click',()=>{
       session.signOut();
       login.value='';secret.value='';
-      button.hidden=false;logout.hidden=true;
+      button.hidden=false;logout.hidden=true;inspect.hidden=true;report.textContent='';
       status.textContent='Sessão local encerrada.';
     });
   }
