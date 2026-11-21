@@ -51,6 +51,7 @@
         status.textContent='Sessão local autenticada: '+user.login+'. Integração dos módulos ainda pendente.';
         secret.value='';
         button.hidden=true;logout.hidden=false;inspect.hidden=false;
+        if(session.hasPermission('ordens'))globalThis.ACRLocalOrdersUI?.mount(section);
       } catch(error) {
         status.textContent=error?.message||'Não foi possível autenticar.';
       } finally {button.disabled=false;}
@@ -65,6 +66,7 @@
     });
     logout.addEventListener('click',()=>{
       session.signOut();
+      globalThis.ACRLocalOrdersUI?.unmount();
       login.value='';secret.value='';
       button.hidden=false;logout.hidden=true;inspect.hidden=true;report.textContent='';
       status.textContent='Sessão local encerrada.';
