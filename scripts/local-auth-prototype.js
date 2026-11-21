@@ -20,23 +20,10 @@
   function publicUser(record) {
     return Object.freeze({login:record.login,perfil:record.perfil,permissions:structuredClone(record.permissions)});
   }
-  async function provisionVerifiedUser(user,secret,authorization) {
-    // Exige autorização explícita de migração fornecida pelo integrador seguro.
-    // Este protótipo não emite autorizações e não deve ser exposto na UI.
-    // Um booleano não prova identidade nem autorização. Bloqueado até existir\n    // uma migração autenticada com validação de origem e consentimento.\n    throw Error('Provisionamento bloqueado até migração autenticada e validada.');
-    const login=normalizeLogin(user?.login);
-    if (!['Administrador','Tecnico','Usuário'].includes(user?.perfil)) throw Error('Perfil inválido.');
-    if (!user.permissions || typeof user.permissions!=='object' || Array.isArray(user.permissions)) throw Error('Permissões inválidas.');
-    const permissions={};
-    for (const [key,value] of Object.entries(user.permissions)) {
-      if(!/^[a-z][a-z0-9_-]{1,40}$/.test(key)||typeof value!=='boolean') throw Error('Permissão inválida.');
-      permissions[key]=value;
-    }
-    const key=PREFIX+login;
-    if(await store.get(key)!==null) throw Error('Usuário local já cadastrado.');
-    const verifier=await password.createVerifier(secret);
-    await store.set(key,{schema:1,login,perfil:user.perfil,permissions,verifier});
-    return login;
+  async function provisionVerifiedUser() {
+    // Bloqueado até implementar migração autenticada, verificável e consentida.
+    // Um booleano não constitui prova de autorização.
+    throw Error('Provisionamento bloqueado até migração autenticada e validada.');
   }
   async function authenticate(login,secret) {
     const name=normalizeLogin(login);
