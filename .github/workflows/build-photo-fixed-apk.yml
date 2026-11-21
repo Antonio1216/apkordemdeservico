@@ -40,6 +40,7 @@ on:
       - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
       - 'scripts/local-auth-prototype.js'
+      - 'scripts/test-local-auth-security.cjs'
       - 'scripts/test-local-store-integration.py'
       - 'scripts/map-auth-contract.py'
   push:
@@ -81,6 +82,7 @@ on:
       - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
       - 'scripts/local-auth-prototype.js'
+      - 'scripts/test-local-auth-security.cjs'
       - 'scripts/test-local-store-integration.py'
       - 'scripts/map-auth-contract.py'
   workflow_dispatch:
@@ -122,6 +124,7 @@ jobs:
           node --check ospro-eletrica-software/app/src/main/assets/local-modules.js
           node --check ospro-eletrica-software/app/src/main/assets/senha-local.js
           node --check ospro-eletrica-software/app/src/main/assets/local-auth-prototype.js
+          node scripts/test-local-auth-security.cjs
           python scripts/test-local-store-integration.py ospro-eletrica-software
           node --check ospro-eletrica-software/app/src/main/assets/service-desk-ui.js
           node --check ospro-eletrica-software/app/src/main/assets/recovery-ui.js
