@@ -16,15 +16,17 @@ shutil.copyfile(Path(__file__).with_name('local-modules-v1.js'), assets / 'local
 shutil.copyfile(Path(__file__).with_name('local-password-v1.js'), assets / 'senha-local.js')
 shutil.copyfile(Path(__file__).with_name('local-auth-prototype.js'), assets / 'local-auth-prototype.js')
 markup = html.read_text(encoding='utf-8')
-tag = '  <script src="local-store.js" defer></script>\n  <script src="local-modules.js" defer></script>\n  <script src="senha-local.js" defer></script>\n  <script src="local-auth-prototype.js" defer></script>'
-if 'src="local-modules.js"' not in markup:
-    if '</body>' not in markup:
-        raise SystemExit('index.html sem fechamento de body.')
-    anchor = '<script src="auth.js" defer></script>'
-    if anchor not in markup:
-        raise SystemExit('Script auth.js não encontrado para garantir a ordem de carregamento.')
-    markup = markup.replace(anchor, tag + '\n  ' + anchor, 1)
-    html.write_text(markup, encoding='utf-8')
-if 'src="senha-local.js"' not in html.read_text(encoding='utf-8') or 'src="local-auth-prototype.js"' not in html.read_text(encoding='utf-8'):
-    raise SystemExit('Módulo de senha local não incluído no HTML.')
-print('Camada local e verificador de senhas incluídos; login offline ainda NÃO ativado.')
+anchor = '<script src="auth.js" defer></script>'
+if anchor not in markup:
+    raise SystemExit('Script auth.js não encontrado; integração interrompida.')
+modules = ['local-store.js', 'local-modules.js', 'senha-local.js', 'local-auth-prototype.js']
+# Reconciliar instalação parcial sem duplicar scripts.
+import re
+for module in modules:
+    markup = re.sub(r'<script\\s+src=["\\']' + re.escape(module) + r'["\\']\\s+defer\\s*></script>\\s*', '', markup)
+tags = '\\n'.join('  <script src="' + module + '" defer></script>' for module in modules)
+markup = markup.replace(anchor, tags + '\\n  ' + anchor, 1)
+html.write_text(markup, encoding='utf-8')
+if any(markup.count('src="' + module + '"') != 1 for module in modules):
+    raise SystemExit('Módulos locais duplicados ou ausentes.')
+print('Camada local instalada de modo idempotente; login offline NÃO ativado.')
