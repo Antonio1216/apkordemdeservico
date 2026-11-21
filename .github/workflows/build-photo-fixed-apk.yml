@@ -45,6 +45,7 @@ on:
       - 'scripts/test-local-modules.cjs'
       - 'scripts/test-local-backup.cjs'
       - 'scripts/test-local-password.cjs'
+      - 'scripts/report-offline-blockers.py'
       - 'scripts/test-local-store-integration.py'
       - 'scripts/map-auth-contract.py'
   push:
@@ -91,6 +92,7 @@ on:
       - 'scripts/test-local-modules.cjs'
       - 'scripts/test-local-backup.cjs'
       - 'scripts/test-local-password.cjs'
+      - 'scripts/report-offline-blockers.py'
       - 'scripts/test-local-store-integration.py'
       - 'scripts/map-auth-contract.py'
   workflow_dispatch:
@@ -226,6 +228,19 @@ jobs:
           name: mapa-login-acr-os-pro-local
           path: ospro-eletrica-software/auth-local-integration-report.json
           retention-days: 7
+
+      - name: Mapear bloqueios da nova versao offline
+        if: github.ref == 'refs/heads/acr-os-pro-novo-local'
+        run: python scripts/report-offline-blockers.py ospro-eletrica-software
+
+      - name: Publicar relatorio de bloqueios offline
+        if: github.ref == 'refs/heads/acr-os-pro-novo-local'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bloqueios-acr-os-pro-novo-local
+          path: ospro-eletrica-software/offline-blockers.json
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Auditar dependências remotas da versão local
         if: github.ref == 'refs/heads/acr-os-pro-local'
