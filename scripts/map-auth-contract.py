@@ -22,8 +22,8 @@ def summarize(source):
     return result
 def declarations(source):
     # Function names and line numbers only; never include function bodies.
-    pattern = re.compile(r'\\b(?:async\\s+)?function\\s+([A-Za-z_$][\\w$]*)\\s*\\(')
-    return [{'name':m.group(1),'line':source.count('\\n',0,m.start())+1}
+    pattern = re.compile(r'\b(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(')
+    return [{'name':m.group(1),'line':source.count('\n',0,m.start())+1}
             for m in pattern.finditer(source)][:150]
 
 scripts=re.findall(r"""<script[^>]+src=["']([^"']+)["']""", html)
