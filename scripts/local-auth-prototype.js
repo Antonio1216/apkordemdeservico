@@ -23,7 +23,7 @@
   async function provisionVerifiedUser(user,secret,authorization) {
     // Exige autorização explícita de migração fornecida pelo integrador seguro.
     // Este protótipo não emite autorizações e não deve ser exposto na UI.
-    if (authorization!==true) throw Error('Migração de usuário não autorizada.');
+    // Um booleano não prova identidade nem autorização. Bloqueado até existir\n    // uma migração autenticada com validação de origem e consentimento.\n    throw Error('Provisionamento bloqueado até migração autenticada e validada.');
     const login=normalizeLogin(user?.login);
     if (!['Administrador','Tecnico','Usuário'].includes(user?.perfil)) throw Error('Perfil inválido.');
     if (!user.permissions || typeof user.permissions!=='object' || Array.isArray(user.permissions)) throw Error('Permissões inválidas.');
