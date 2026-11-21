@@ -65,7 +65,7 @@
     document.head.append(style);
   }
   function setupNavigation(section) {
-    const targets=[['acr-local-orders','Ordens de serviço'],['acr-local-registry','Cadastros']];
+    const targets=[['acr-local-orders','Ordens de serviço'],['acr-local-registry','Cadastros'],['acr-local-finance','Financeiro']];
     const available=targets.filter(([id])=>document.getElementById(id));
     if(!available.length)return;
     const nav=node('nav',{id:'acr-local-nav','aria-label':'Seções locais'});
@@ -125,6 +125,7 @@
         button.hidden=true;logout.hidden=false;inspect.hidden=false;
         if(session.hasPermission('ordens'))globalThis.ACRLocalOrdersUI?.mount(section);
         globalThis.ACRLocalRegistryUI?.mount(section);
+        globalThis.ACRLocalFinanceUI?.mount(section);
         setupNavigation(section);
       } catch(error) {
         status.textContent=error?.message||'Não foi possível autenticar.';
@@ -142,6 +143,7 @@
       session.signOut();
       globalThis.ACRLocalOrdersUI?.unmount();
       globalThis.ACRLocalRegistryUI?.unmount();
+      globalThis.ACRLocalFinanceUI?.unmount();
       document.getElementById('acr-local-nav')?.remove();
       document.getElementById('acr-local-header')?.remove();
       section.classList.remove('acr-authenticated');
