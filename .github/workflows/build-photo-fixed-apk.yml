@@ -41,10 +41,11 @@ on:
       - 'scripts/add-local-store-v1.py'
       - 'scripts/local-auth-prototype.js'
       - 'scripts/test-local-auth-security.cjs'
+      - 'scripts/configure-new-local-app.py'
       - 'scripts/test-local-store-integration.py'
       - 'scripts/map-auth-contract.py'
   push:
-    branches: [main, acr-os-pro-local]
+    branches: [main, acr-os-pro-local, acr-os-pro-novo-local]
     paths:
       - '.github/workflows/build-photo-fixed-apk.yml'
       - 'scripts/fix-photo-picker.py'
@@ -83,6 +84,7 @@ on:
       - 'scripts/add-local-store-v1.py'
       - 'scripts/local-auth-prototype.js'
       - 'scripts/test-local-auth-security.cjs'
+      - 'scripts/configure-new-local-app.py'
       - 'scripts/test-local-store-integration.py'
       - 'scripts/map-auth-contract.py'
   workflow_dispatch:
@@ -120,6 +122,9 @@ jobs:
           python scripts/add-service-desk-v181.py ospro-eletrica-software
           python scripts/add-finished-orders-v1711.py ospro-eletrica-software
           python scripts/add-local-store-v1.py ospro-eletrica-software
+          if [ "${GITHUB_REF}" = 'refs/heads/acr-os-pro-novo-local' ]; then
+            python scripts/configure-new-local-app.py ospro-eletrica-software
+          fi
           node --check ospro-eletrica-software/app/src/main/assets/local-store.js
           node --check ospro-eletrica-software/app/src/main/assets/local-modules.js
           node --check ospro-eletrica-software/app/src/main/assets/senha-local.js
@@ -140,6 +145,9 @@ jobs:
           node --check ospro-eletrica-software/app/src/main/assets/permissions.js
           node --check ospro-eletrica-software/app/src/main/assets/app.js
           grep -q 'versionName = "1.7.11"' ospro-eletrica-software/app/build.gradle.kts
+          if [ "${GITHUB_REF}" = 'refs/heads/acr-os-pro-novo-local' ]; then
+            grep -q 'applicationId = "br.com.ospro.ordens.local"' ospro-eletrica-software/app/build.gradle.kts
+          fi
           python - <<'PY'
           from pathlib import Path
           root=Path('ospro-eletrica-software/app/src/main')
@@ -199,7 +207,7 @@ jobs:
           grep -q 'id="photo-camera"' ospro-eletrica-software/app/src/main/assets/index.html
 
       - name: Mapear integração do login local
-        if: github.ref == 'refs/heads/acr-os-pro-local'
+        if: github.ref == 'refs/heads/acr-os-pro-local' || github.ref == 'refs/heads/acr-os-pro-novo-local'
         run: python scripts/map-auth-contract.py ospro-eletrica-software
 
       - name: Disponibilizar mapa de autenticação
