@@ -13,10 +13,57 @@
     if(value)el.textContent=value;
     return el;
   }
+  function renderLocalLogin() {
+    if (document.getElementById('acr-local-login')) return;
+    const session=globalThis.ACRLocalSession;
+    if (!session) throw Error('Sessão local indisponível.');
+    const section=node('section',{id:'acr-local-login','aria-label':'Login local independente'});
+    section.style.cssText='max-width:440px;margin:16px auto;padding:20px;border:2px solid #245d92;border-radius:12px;background:#fff;color:#172b4d;position:relative;z-index:20';
+    section.append(node('h2',{},'Entrar no ACR OS Pro Local'));
+    section.append(node('p',{},'Login local experimental. Os módulos do aplicativo antigo ainda não estão integrados a esta sessão.'));
+    const form=node('form');
+    const loginLabel=node('label',{},'Usuário');
+    const login=node('input',{name:'login',autocomplete:'username',required:''});
+    const passwordLabel=node('label',{},'Senha');
+    const secret=node('input',{type:'password',name:'password',autocomplete:'current-password',required:''});
+    for (const [label,input] of [[loginLabel,login],[passwordLabel,secret]]) {
+      label.style.cssText='display:block;margin-top:12px';
+      input.style.cssText='display:block;width:100%;box-sizing:border-box;padding:10px;margin-top:4px';
+      label.append(input);form.append(label);
+    }
+    const button=node('button',{type:'submit'},'Entrar localmente');
+    const logout=node('button',{type:'button'},'Sair da sessão local');
+    logout.hidden=true;
+    const status=node('p',{role:'status','aria-live':'polite'});
+    form.append(button,logout,status);
+    section.append(form);
+    document.body.prepend(section);
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();
+      button.disabled=true;
+      status.textContent='Verificando credenciais locais…';
+      try {
+        const user=await session.signIn(login.value,secret.value);
+        status.textContent='Sessão local autenticada: '+user.login+'. Integração dos módulos ainda pendente.';
+        secret.value='';
+        button.hidden=true;logout.hidden=false;
+      } catch(error) {
+        status.textContent=error?.message||'Não foi possível autenticar.';
+      } finally {button.disabled=false;}
+    });
+    logout.addEventListener('click',()=>{
+      session.signOut();
+      login.value='';secret.value='';
+      button.hidden=false;logout.hidden=true;
+      status.textContent='Sessão local encerrada.';
+    });
+  }
   async function init() {
     await ready();
     const setup=globalThis.ACRLocalFirstRun;
-    if (!setup || !(await setup.needsSetup())) return;
+    if (!setup) return;
+    const isFirstRun = await setup.needsSetup();
+    if (!isFirstRun) { renderLocalLogin(); return; }
     const section=node('section',{id:'acr-local-setup','aria-label':'Configurar administrador local'});
     section.style.cssText='max-width:440px;margin:16px auto;padding:20px;border:2px solid #245d92;border-radius:12px;background:#fff;color:#172b4d;position:relative;z-index:20';
     const title=node('h2',{},'Configurar ACR OS Pro Local');
@@ -48,9 +95,10 @@
       button.disabled=true;
       try {
         await setup.initialize({login:login.value,secret:secret.value,confirmNewInstallation:consent.checked});
-        message.textContent='Administrador criado. Reinicie o aplicativo para continuar a configuração local.';
+        message.textContent='Administrador criado. Entre com seu usuário e senha no login local.';
         form.reset();
         form.querySelectorAll('input').forEach(input=>input.disabled=true);
+        renderLocalLogin();
       } catch(error) {
         message.textContent=error?.message||'Falha ao configurar administrador.';
         button.disabled=false;
