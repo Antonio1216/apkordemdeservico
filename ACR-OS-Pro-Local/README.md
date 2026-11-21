@@ -15,7 +15,7 @@ Preservar a aparência e os recursos da versão 1.7.11, substituindo gradualment
 ## Situação atual
 - [x] Branch independente criada: `acr-os-pro-novo-local`.
 - [x] Código-fonte existente preservado como ponto de partida.
-- [ ] Definir identificador Android independente.
+- [x] Definir identificador Android independente: `br.com.ospro.ordens.local` (via `scripts/configure-new-local-app.py`).
 - [ ] Implementar login offline com provisionamento autorizado.
 - [ ] Migrar todos os módulos para armazenamento local.
 - [ ] Implementar exportação/importação de dados e backups.
@@ -23,3 +23,6 @@ Preservar a aparência e os recursos da versão 1.7.11, substituindo gradualment
 
 ## Compilação
 O workflow existente `.github/workflows/build-photo-fixed-apk.yml` foi herdado. **Uma compilação verde não comprova funcionamento offline.** Não instalar APK DEBUG sobre o aplicativo original.
+
+## Execução de testes
+O GitHub Actions compila esta branch e executa os testes estáticos e de segurança. O APK gerado continua sendo **DEBUG e não homologado**. A nova identidade permite instalação separada, mas não migra automaticamente contas ou dados.
