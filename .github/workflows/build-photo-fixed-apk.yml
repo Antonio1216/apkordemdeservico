@@ -50,6 +50,8 @@ on:
       - 'scripts/test-local-session.cjs'
       - 'scripts/local-first-run-v1.js'
       - 'scripts/test-local-first-run.cjs'
+      - 'scripts/local-first-run-ui.js'
+      - 'scripts/add-local-first-run-ui.py'
       - 'scripts/test-local-store-integration.py'
       - 'scripts/map-auth-contract.py'
   push:
@@ -101,6 +103,8 @@ on:
       - 'scripts/test-local-session.cjs'
       - 'scripts/local-first-run-v1.js'
       - 'scripts/test-local-first-run.cjs'
+      - 'scripts/local-first-run-ui.js'
+      - 'scripts/add-local-first-run-ui.py'
       - 'scripts/test-local-store-integration.py'
       - 'scripts/map-auth-contract.py'
   workflow_dispatch:
@@ -140,6 +144,7 @@ jobs:
           python scripts/add-local-store-v1.py ospro-eletrica-software
           if [ "${GITHUB_REF}" = 'refs/heads/acr-os-pro-novo-local' ]; then
             python scripts/configure-new-local-app.py ospro-eletrica-software
+            python scripts/add-local-first-run-ui.py ospro-eletrica-software
           fi
           node --check ospro-eletrica-software/app/src/main/assets/local-store.js
           node --check ospro-eletrica-software/app/src/main/assets/local-modules.js
@@ -152,6 +157,10 @@ jobs:
           node scripts/test-local-session.cjs
           node scripts/test-local-first-run.cjs
           node --check ospro-eletrica-software/app/src/main/assets/local-first-run.js
+          if [ "${GITHUB_REF}" = 'refs/heads/acr-os-pro-novo-local' ]; then
+            node --check ospro-eletrica-software/app/src/main/assets/local-first-run-ui.js
+            grep -q 'src="local-first-run-ui.js"' ospro-eletrica-software/app/src/main/assets/index.html
+          fi
           node --check ospro-eletrica-software/app/src/main/assets/local-session.js
           python scripts/test-local-store-integration.py ospro-eletrica-software
           node --check ospro-eletrica-software/app/src/main/assets/service-desk-ui.js
