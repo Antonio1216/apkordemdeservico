@@ -9,6 +9,7 @@ html = (assets / "index.html").read_text(encoding="utf-8")
 js = (assets / "local-store.js").read_text(encoding="utf-8")
 assert html.count('src="local-store.js"') == 1, "Script local não carregado exatamente uma vez"
 assert 'src="auth.js"' in html, "Fluxo de autenticação original ausente"
+assert html.index('src="local-store.js"') < html.index('src="local-modules.js"') < html.index('src="auth.js"'), "Armazenamento local precisa iniciar antes do login"
 assert 'indexedDB.open' in js, "Persistência IndexedDB ausente"
 assert "db.transaction(STORE, mode)" in js, "Transações ausentes"
 assert "tx.oncomplete" in js, "Confirmação de gravação ausente"
