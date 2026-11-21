@@ -14,8 +14,9 @@ if not source.is_file() or not html.is_file():
 shutil.copyfile(source, target)
 shutil.copyfile(Path(__file__).with_name('local-modules-v1.js'), assets / 'local-modules.js')
 shutil.copyfile(Path(__file__).with_name('local-password-v1.js'), assets / 'senha-local.js')
+shutil.copyfile(Path(__file__).with_name('local-auth-prototype.js'), assets / 'local-auth-prototype.js')
 markup = html.read_text(encoding='utf-8')
-tag = '  <script src="local-store.js" defer></script>\n  <script src="local-modules.js" defer></script>\n  <script src="senha-local.js" defer></script>'
+tag = '  <script src="local-store.js" defer></script>\n  <script src="local-modules.js" defer></script>\n  <script src="senha-local.js" defer></script>\n  <script src="local-auth-prototype.js" defer></script>'
 if 'src="local-modules.js"' not in markup:
     if '</body>' not in markup:
         raise SystemExit('index.html sem fechamento de body.')
@@ -24,6 +25,6 @@ if 'src="local-modules.js"' not in markup:
         raise SystemExit('Script auth.js não encontrado para garantir a ordem de carregamento.')
     markup = markup.replace(anchor, tag + '\n  ' + anchor, 1)
     html.write_text(markup, encoding='utf-8')
-if 'src="senha-local.js"' not in markup and 'src="senha-local.js"' not in html.read_text(encoding='utf-8'):
+if 'src="senha-local.js"' not in html.read_text(encoding='utf-8') or 'src="local-auth-prototype.js"' not in html.read_text(encoding='utf-8'):
     raise SystemExit('Módulo de senha local não incluído no HTML.')
 print('Camada local e verificador de senhas incluídos; login offline ainda NÃO ativado.')
