@@ -21,8 +21,10 @@ assert html.count('id="local-auth-setup"') == 1, 'Formulário de primeiro cadast
 assert html.count('id="local-auth-login"') == 1, 'Formulário de autenticação local ausente'
 assert html.count('id="local-auth-message"') == 1, 'Mensagem acessível do login local ausente'
 assert 'type="password"' in html and 'autocomplete="new-password"' in html, 'Senha local deve usar campo protegido'
+assert html.count('src="local-session.js"') == 1, 'Sessão local ausente ou duplicada'
+assert (assets / 'local-session.js').is_file(), 'Módulo de sessão não foi copiado'
 assert 'src="auth.js"' in html, "Fluxo de autenticação original ausente"
-assert html.index('src="local-store.js"') < html.index('src="local-modules.js"') < html.index('src="senha-local.js"') < html.index('src="local-first-run.js"') < html.index('src="local-auth-prototype.js"') < html.index('src="local-login-ui.js"') < html.index('src="auth.js"'), "Armazenamento local precisa iniciar antes do login"
+assert html.index('src="local-store.js"') < html.index('src="local-modules.js"') < html.index('src="senha-local.js"') < html.index('src="local-first-run.js"') < html.index('src="local-auth-prototype.js"') < html.index('src="local-session.js"') < html.index('src="local-login-ui.js"') < html.index('src="auth.js"'), "Armazenamento local precisa iniciar antes do login"
 prototype = (assets / 'local-auth-prototype.js').read_text(encoding='utf-8')
 assert "Provisionamento bloqueado" in prototype, "Provisionamento inseguro não pode ser liberado"
 assert 'indexedDB.open' in js, "Persistência IndexedDB ausente"
