@@ -27,23 +27,22 @@
   +'<p><strong>Situação:</strong> Recebido</p><small>Comprovante gerado pelo aplicativo a partir de lançamento registrado localmente. Data e hora dependem do relógio do dispositivo; coordenadas dependem da permissão de localização. Não equivale a comprovante bancário ou fiscal.</small></body></html>';
  }
  function downloadReceipt(record){
-  const blob=new Blob([receiptHtml(record)],{type:'text/html;charset=utf-8'});
-  const filename='comprovante-recebimento-'+record.id+'.html';
-  // Android WebView may ignore synthetic downloads for blob: URLs.
-  // Offer a visible printable document even when download is unsupported.
-  const url=URL.createObjectURL(blob);
-  const a=el('a','Abrir comprovante');
-  a.href=url;a.target='_blank';a.rel='noopener';
-  a.download=filename;
-  a.style.cssText='display:inline-block;padding:10px;margin:8px 0;background:#145d9d;color:white;border-radius:6px';
+  // Show receipt inside the current WebView; blob downloads and new windows
+  // are often blocked by Android app containers.
   const host=document.getElementById('acr-local-finance');
-  const previous=host?.querySelector('[data-acr-receipt-link]');
-  previous?.remove();
-  a.dataset.acrReceiptLink='true';
-  host?.append(a);
-  a.click();
-  // Keep the URL available for manual opening if the WebView blocks the click.
-  setTimeout(()=>{a.remove();URL.revokeObjectURL(url)},120000);
+  if(!host)throw Error('Tela financeira indisponível.');
+  host.querySelector('[data-acr-receipt-preview]')?.remove();
+  const panel=el('section');panel.dataset.acrReceiptPreview='true';
+  panel.style.cssText='margin:16px 0;padding:12px;border:1px solid #b7c7d4;border-radius:8px;background:white';
+  const heading=el('h4','Comprovante de recebimento');
+  const note=el('p','Pré-visualização no aplicativo. Para obter PDF, use Imprimir e escolha Salvar como PDF, se disponível.');
+  const frame=el('iframe');
+  frame.title='Visualização do comprovante';
+  frame.style.cssText='display:block;width:100%;height:520px;border:1px solid #ccd6df;background:white';
+  frame.srcdoc=receiptHtml(record);
+  const close=el('button','Fechar comprovante');close.type='button';close.onclick=()=>panel.remove();
+  panel.append(heading,note,frame,close);host.append(panel);
+  panel.scrollIntoView({behavior:'smooth',block:'start'});
  }
  function mount(parent){
   if(document.getElementById('acr-local-finance'))return;
