@@ -39,6 +39,7 @@ on:
       - 'scripts/auditar-migracao-local.py'
       - 'scripts/local-store-v1.js'
       - 'scripts/local-first-run-v1.js'
+      - 'scripts/test-local-first-run.cjs'
       - 'scripts/senha-local-v1.js'
       - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
@@ -85,6 +86,7 @@ on:
       - 'scripts/auditar-migracao-local.py'
       - 'scripts/local-store-v1.js'
       - 'scripts/local-first-run-v1.js'
+      - 'scripts/test-local-first-run.cjs'
       - 'scripts/senha-local-v1.js'
       - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
@@ -131,6 +133,7 @@ jobs:
           python scripts/add-govbr-receipt-v1.py ospro-eletrica-software
           node --check ospro-eletrica-software/app/src/main/assets/govbr-receipt.js
           node --check scripts/local-first-run-v1.js
+          node scripts/test-local-first-run.cjs
           node --check scripts/local-store-v1.js
           node --check ospro-eletrica-software/app/src/main/assets/local-store.js
           node --check ospro-eletrica-software/app/src/main/assets/local-modules.js
