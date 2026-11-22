@@ -33,6 +33,8 @@
   try{
    const user=await session.signIn(field(form,'login'),field(form,'senha'));
    form.reset();
+   $('local-auth-login').hidden=true;
+   $('local-auth-signout').hidden=false;
    setMessage('Sessão local iniciada para '+user.login+'. O acesso às OS e ao Financeiro ainda requer integração.');
   }catch(e){setMessage(e.message||'Não foi possível autenticar.',true);}
   finally{button.disabled=false;}
@@ -41,6 +43,7 @@
   if(!$('local-auth-setup')||!$('local-auth-login'))return;
   $('local-auth-setup').addEventListener('submit',setup);
   $('local-auth-login').addEventListener('submit',login);
+  $('local-auth-signout').addEventListener('click',()=>{session.signOut();$('local-auth-signout').hidden=true;$('local-auth-login').hidden=false;setMessage('Sessão local encerrada.');});
   refresh().catch(e=>setMessage(e.message,true));
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
