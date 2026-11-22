@@ -17,10 +17,7 @@
   const state=await status();
   if(!state.isFresh)throw Error('Banco não está vazio. Cadastro inicial bloqueado para evitar perda ou substituição de contas.');
   const verifier=await pass.createVerifier(password);
-  // Revalidar imediatamente antes de gravar. O bloqueio de concorrência deve ser reforçado
-  // por transação única no armazenamento antes de disponibilizar o recurso em produção.
-  if(!(await status()).isFresh)throw Error('O banco foi alterado durante o cadastro.');
-  await store.set(KEY+user,{schema:1,login:user,nome:fullName,perfil:'Administrador',permissions:{admin:true},verifier,createdAt:new Date().toISOString()});
+  await store.createFirstAdminAtomic(KEY+user,{schema:1,login:user,nome:fullName,perfil:'Administrador',permissions:{admin:true},verifier,createdAt:new Date().toISOString()});
   return Object.freeze({login:user,nome:fullName,perfil:'Administrador'});
  }
  Object.defineProperty(globalThis,'ACRLocalFirstRun',{value:Object.freeze({status,createFirstAdmin}),configurable:false,writable:false});
