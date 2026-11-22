@@ -28,6 +28,28 @@ for module in modules:
     markup = markup.replace(tag, '')
 tags = '\n'.join('  <script src="' + module + '" defer></script>' for module in modules)
 markup = markup.replace(anchor, tags + '\n  ' + anchor, 1)
+# Interface isolada de testes; não altera autenticação principal nem concede sessão.
+panel = '''<section id="local-auth-panel" aria-labelledby="local-auth-title" style="margin:1rem auto;max-width:34rem;padding:1rem;border:1px solid #aac0d0;border-radius:12px;background:#fff;color:#17334b">
+<h2 id="local-auth-title">Acesso local — preparação</h2>
+<p>Cadastro e verificação local em testes. O acesso às OS e ao Financeiro ainda não está liberado por esta tela.</p>
+<form id="local-auth-setup" hidden>
+<label>Nome completo <input name="nome" autocomplete="name" required minlength="3"></label>
+<label>Usuário <input name="login" autocomplete="username" required minlength="3"></label>
+<label>Senha (mínimo 12 caracteres) <input name="senha" type="password" autocomplete="new-password" required minlength="12"></label>
+<label>Confirmar senha <input name="confirmar" type="password" autocomplete="new-password" required minlength="12"></label>
+<button type="submit">Criar administrador local</button>
+</form>
+<form id="local-auth-login" hidden>
+<label>Usuário <input name="login" autocomplete="username" required></label>
+<label>Senha <input name="senha" type="password" autocomplete="current-password" required></label>
+<button type="submit">Verificar credenciais locais</button>
+</form>
+<p id="local-auth-message" role="status" aria-live="polite"></p>
+</section>'''
+if markup.count('id="local-auth-panel"') == 0:
+    markup = markup.replace('</body>', panel + '\\n</body>', 1)
+if markup.count('id="local-auth-panel"') != 1:
+    raise SystemExit('Painel de autenticação local duplicado ou ausente.')
 html.write_text(markup, encoding='utf-8')
 if any(markup.count('src="' + module + '"') != 1 for module in modules):
     raise SystemExit('Módulos locais duplicados ou ausentes.')
