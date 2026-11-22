@@ -3,8 +3,8 @@
  * os módulos de OS/Financeiro não estiverem conectados à autorização local.
  */
 (()=>{'use strict';
- const first=globalThis.ACRLocalFirstRun,auth=globalThis.ACRLocalAuthPrototype;
- if(!first||!auth)throw Error('Autenticação local indisponível.');
+ const first=globalThis.ACRLocalFirstRun,session=globalThis.ACRLocalSession;
+ if(!first||!session)throw Error('Autenticação local indisponível.');
  const $=id=>document.getElementById(id);
  const setMessage=(message,error=false)=>{const el=$('local-auth-message');if(el){el.textContent=message;el.setAttribute('role',error?'alert':'status');}};
  async function refresh(){
@@ -31,9 +31,9 @@
   const form=event.currentTarget,button=form.querySelector('button[type=submit]');
   button.disabled=true;
   try{
-   const user=await auth.authenticate(field(form,'login'),field(form,'senha'));
+   const user=await session.signIn(field(form,'login'),field(form,'senha'));
    form.reset();
-   setMessage('Credenciais locais verificadas para '+user.login+'. Acesso aos módulos ainda depende da integração da sessão.');
+   setMessage('Sessão local iniciada para '+user.login+'. O acesso às OS e ao Financeiro ainda requer integração.');
   }catch(e){setMessage(e.message||'Não foi possível autenticar.',true);}
   finally{button.disabled=false;}
  }
