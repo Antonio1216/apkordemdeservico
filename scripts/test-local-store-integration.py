@@ -16,6 +16,11 @@ assert html.count('src="local-first-run.js"') == 1, 'Cadastro inicial local ause
 assert (assets / 'local-first-run.js').is_file(), 'Script de primeiro acesso não foi copiado'
 assert html.count('src="local-login-ui.js"') == 1, 'Controlador da interface local ausente ou duplicado'
 assert (assets / 'local-login-ui.js').is_file(), 'Controlador da interface não foi copiado'
+assert html.count('id="local-auth-panel"') == 1, 'Painel de login local ausente ou duplicado'
+assert html.count('id="local-auth-setup"') == 1, 'Formulário de primeiro cadastro ausente'
+assert html.count('id="local-auth-login"') == 1, 'Formulário de autenticação local ausente'
+assert html.count('id="local-auth-message"') == 1, 'Mensagem acessível do login local ausente'
+assert 'type="password"' in html and 'autocomplete="new-password"' in html, 'Senha local deve usar campo protegido'
 assert 'src="auth.js"' in html, "Fluxo de autenticação original ausente"
 assert html.index('src="local-store.js"') < html.index('src="local-modules.js"') < html.index('src="senha-local.js"') < html.index('src="local-first-run.js"') < html.index('src="local-auth-prototype.js"') < html.index('src="local-login-ui.js"') < html.index('src="auth.js"'), "Armazenamento local precisa iniciar antes do login"
 prototype = (assets / 'local-auth-prototype.js').read_text(encoding='utf-8')
