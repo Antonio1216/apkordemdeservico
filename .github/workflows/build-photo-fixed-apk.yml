@@ -41,6 +41,7 @@ on:
       - 'scripts/local-first-run-v1.js'
       - 'scripts/test-local-first-run.cjs'
       - 'scripts/test-local-login-end-to-end.cjs'
+      - 'scripts/audit-login-integration.py'
       - 'scripts/senha-local-v1.js'
       - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
@@ -89,6 +90,7 @@ on:
       - 'scripts/local-first-run-v1.js'
       - 'scripts/test-local-first-run.cjs'
       - 'scripts/test-local-login-end-to-end.cjs'
+      - 'scripts/audit-login-integration.py'
       - 'scripts/senha-local-v1.js'
       - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
@@ -226,6 +228,18 @@ jobs:
         with:
           name: mapa-login-acr-os-pro-local
           path: ospro-eletrica-software/auth-local-integration-report.json
+          retention-days: 7
+
+      - name: Auditar integração de login e APIs locais
+        if: github.ref == 'refs/heads/acr-os-pro-local'
+        run: python scripts/audit-login-integration.py ospro-eletrica-software
+
+      - name: Disponibilizar diagnóstico de integração offline
+        if: github.ref == 'refs/heads/acr-os-pro-local'
+        uses: actions/upload-artifact@v4
+        with:
+          name: integracao-login-offline
+          path: ospro-eletrica-software/offline-login-readiness.json
           retention-days: 7
 
       - name: Auditar dependências remotas da versão local
