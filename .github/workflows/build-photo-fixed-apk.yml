@@ -6,6 +6,8 @@ on:
       - '.github/workflows/build-photo-fixed-apk.yml'
       - 'scripts/fix-photo-picker.py'
       - 'scripts/fix-document-picker.py'
+      - 'scripts/add-govbr-receipt-v1.py'
+      - 'scripts/govbr-receipt-v1.js'
       - 'scripts/add-user-permissions-v174.py'
       - 'scripts/add-catalog-v175.py'
       - 'scripts/catalog-v175.js'
@@ -49,6 +51,8 @@ on:
       - '.github/workflows/build-photo-fixed-apk.yml'
       - 'scripts/fix-photo-picker.py'
       - 'scripts/fix-document-picker.py'
+      - 'scripts/add-govbr-receipt-v1.py'
+      - 'scripts/govbr-receipt-v1.js'
       - 'scripts/add-user-permissions-v174.py'
       - 'scripts/add-catalog-v175.py'
       - 'scripts/catalog-v175.js'
@@ -120,6 +124,8 @@ jobs:
           python scripts/add-service-desk-v181.py ospro-eletrica-software
           python scripts/add-finished-orders-v1711.py ospro-eletrica-software
           python scripts/add-local-store-v1.py ospro-eletrica-software
+          python scripts/add-govbr-receipt-v1.py ospro-eletrica-software
+          node --check ospro-eletrica-software/app/src/main/assets/govbr-receipt.js
           node --check ospro-eletrica-software/app/src/main/assets/local-store.js
           node --check ospro-eletrica-software/app/src/main/assets/local-modules.js
           node --check ospro-eletrica-software/app/src/main/assets/senha-local.js
