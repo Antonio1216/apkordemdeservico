@@ -15,11 +15,12 @@ shutil.copyfile(source, target)
 shutil.copyfile(Path(__file__).with_name('local-modules-v1.js'), assets / 'local-modules.js')
 shutil.copyfile(Path(__file__).with_name('local-password-v1.js'), assets / 'senha-local.js')
 shutil.copyfile(Path(__file__).with_name('local-auth-prototype.js'), assets / 'local-auth-prototype.js')
+shutil.copyfile(Path(__file__).with_name('local-first-run-v1.js'), assets / 'local-first-run.js')
 markup = html.read_text(encoding='utf-8')
 anchor = '<script src="auth.js" defer></script>'
 if anchor not in markup:
     raise SystemExit('Script auth.js não encontrado; integração interrompida.')
-modules = ['local-store.js', 'local-modules.js', 'senha-local.js', 'local-auth-prototype.js']
+modules = ['local-store.js', 'local-modules.js', 'senha-local.js', 'local-first-run.js', 'local-auth-prototype.js']
 # Reconciliar instalação parcial sem regex ou scripts duplicados.
 for module in modules:
     tag = '<script src="' + module + '" defer></script>'
