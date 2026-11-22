@@ -232,7 +232,19 @@ jobs:
 
       - name: Auditar integração de login e APIs locais
         if: github.ref == 'refs/heads/acr-os-pro-local'
-        run: python scripts/audit-login-integration.py ospro-eletrica-software
+        run: |
+          python scripts/audit-login-integration.py ospro-eletrica-software
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          p=Path('ospro-eletrica-software/offline-login-readiness.json')
+          d=json.loads(p.read_text(encoding='utf-8'))
+          print('Campos da tela:', d['screen_ids'])
+          print('Referências OSAuth:', d['app_auth_references'])
+          print('APIs remotas:', d['remote_endpoints'])
+          print('Módulos locais presentes:', d['local_scripts_present'])
+          print('Login offline pronto:', d['offline_ready'])
+          PY
 
       - name: Disponibilizar diagnóstico de integração offline
         if: github.ref == 'refs/heads/acr-os-pro-local'
