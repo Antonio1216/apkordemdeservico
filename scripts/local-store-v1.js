@@ -76,7 +76,7 @@
     });
   }
   async function exportBackup() {
-    return JSON.stringify({format: BACKUP_FORMAT, version: 1, exportedAt: new Date().toISOString(), records: await entries()});
+    return JSON.stringify({format: BACKUP_FORMAT, version: 1, exportedAt: new Date().toISOString(), records: (await entries()).filter(row => !row.key.startsWith('local-auth:'))});
   }
   async function importBackup(json) {
     const payload = typeof json === 'string' ? JSON.parse(json) : json;
@@ -87,6 +87,7 @@
     const records = payload.records.map(row => {
       if (!row || typeof row !== 'object') throw new Error('Registro inválido no backup.');
       const key = validKey(row.key);
+      if (key.startsWith('local-auth:')) throw new Error('Backup contém credenciais; importação bloqueada.');
       if (keys.has(key) || !Object.prototype.hasOwnProperty.call(row, 'value')) throw new Error('Backup com registros inválidos ou duplicados.');
       keys.add(key);
       return {key, value: structuredClone(row.value)};
