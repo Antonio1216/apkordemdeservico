@@ -45,7 +45,7 @@ panel = '''<section id="local-auth-panel" aria-labelledby="local-auth-title" sty
 <label>Senha <input name="senha" type="password" autocomplete="current-password" required></label>
 <button type="submit">Verificar credenciais locais</button>
 </form>
-<p id="local-auth-message" role="status" aria-live="polite"></p>
+<button id="local-auth-signout" type="button" hidden>Encerrar sessão local</button>\n<p id="local-auth-message" role="status" aria-live="polite"></p>
 </section>'''
 if markup.count('id="local-auth-panel"') == 0:
     markup = markup.replace('</body>', panel + '\\n</body>', 1)
