@@ -45,6 +45,7 @@ on:
       - 'scripts/test-local-auth-security.cjs'
       - 'scripts/test-local-store-integration.py'
       - 'scripts/map-auth-contract.py'
+      - 'scripts/test-offline-login-readiness.py'
   push:
     branches: [main, acr-os-pro-local]
     paths:
@@ -89,6 +90,7 @@ on:
       - 'scripts/test-local-auth-security.cjs'
       - 'scripts/test-local-store-integration.py'
       - 'scripts/map-auth-contract.py'
+      - 'scripts/test-offline-login-readiness.py'
   workflow_dispatch:
 
 permissions:
