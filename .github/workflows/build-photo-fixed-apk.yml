@@ -43,6 +43,7 @@ on:
       - 'scripts/test-local-login-end-to-end.cjs'
       - 'scripts/audit-login-integration.py'
       - 'scripts/test-local-backup-auth.cjs'
+      - 'scripts/test-local-permissions.cjs'
       - 'scripts/senha-local-v1.js'
       - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
@@ -93,6 +94,7 @@ on:
       - 'scripts/test-local-login-end-to-end.cjs'
       - 'scripts/audit-login-integration.py'
       - 'scripts/test-local-backup-auth.cjs'
+      - 'scripts/test-local-permissions.cjs'
       - 'scripts/senha-local-v1.js'
       - 'scripts/local-modules-v1.js'
       - 'scripts/add-local-store-v1.py'
@@ -142,6 +144,7 @@ jobs:
           node scripts/test-local-first-run.cjs
           node scripts/test-local-login-end-to-end.cjs
           node scripts/test-local-backup-auth.cjs
+          node scripts/test-local-permissions.cjs
           node --check scripts/local-store-v1.js
           node --check ospro-eletrica-software/app/src/main/assets/local-store.js
           node --check ospro-eletrica-software/app/src/main/assets/local-modules.js
