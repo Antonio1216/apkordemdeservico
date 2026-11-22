@@ -33,6 +33,8 @@ report={
  'auth_function_declarations':declarations(auth),
  'app':summarize(app),
  'script_load_order':[x for x in scripts if x in ('local-store.js','local-modules.js','senha-local.js','local-auth-prototype.js','auth.js','app.js')],
+ 'login_ui_ids':sorted(set(re.findall(r'''id=["']([^"']*(?:login|auth|server|https|password)[^"']*)["']''',html,re.I))),
+ 'remote_login_routes':sorted(set(re.findall(r'/api/(?:team|auth)/[a-zA-Z/-]+',auth))),
  'offline_login_implemented':False,
  'offline_login_validated_on_device':False,
  'migration_approved':False,
