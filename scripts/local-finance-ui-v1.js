@@ -28,8 +28,22 @@
  }
  function downloadReceipt(record){
   const blob=new Blob([receiptHtml(record)],{type:'text/html;charset=utf-8'});
-  const url=URL.createObjectURL(blob),a=el('a');a.href=url;a.download='comprovante-recebimento-'+record.id+'.html';a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),3000);
+  const filename='comprovante-recebimento-'+record.id+'.html';
+  // Android WebView may ignore synthetic downloads for blob: URLs.
+  // Offer a visible printable document even when download is unsupported.
+  const url=URL.createObjectURL(blob);
+  const a=el('a','Abrir comprovante');
+  a.href=url;a.target='_blank';a.rel='noopener';
+  a.download=filename;
+  a.style.cssText='display:inline-block;padding:10px;margin:8px 0;background:#145d9d;color:white;border-radius:6px';
+  const host=document.getElementById('acr-local-finance');
+  const previous=host?.querySelector('[data-acr-receipt-link]');
+  previous?.remove();
+  a.dataset.acrReceiptLink='true';
+  host?.append(a);
+  a.click();
+  // Keep the URL available for manual opening if the WebView blocks the click.
+  setTimeout(()=>{a.remove();URL.revokeObjectURL(url)},120000);
  }
  function mount(parent){
   if(document.getElementById('acr-local-finance'))return;
