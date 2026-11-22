@@ -49,6 +49,22 @@
     const snapshot = structuredClone(value);
     await transact('readwrite', (store) => store.put({key, value: snapshot}));
   }
+  async function createFirstAdminAtomic(key, record) {
+    validKey(key);
+    if (!key.startsWith('local-auth:user:') || !record || record.schema !== 1 || record.perfil !== 'Administrador')
+      throw new Error('Cadastro inicial inválido.');
+    // A verificação e a escrita ocorrem na mesma transação IndexedDB.
+    await transact('readwrite', (store) => {
+      const request = store.openCursor();
+      request.onsuccess = () => {
+        if (request.result) {
+          request.transaction.abort();
+          return;
+        }
+        store.add({key, value: structuredClone(record)});
+      };
+    }).catch(() => { throw new Error('Banco não está vazio ou cadastro inicial já realizado.'); });
+  }
   async function remove(key) {
     validKey(key);
     await transact('readwrite', store => store.delete(key));
@@ -83,7 +99,7 @@
     return records.length;
   }
   Object.defineProperty(window, 'ACRLocalStore', {
-    value: Object.freeze({get, set, remove, entries, exportBackup, importBackup}),
+    value: Object.freeze({get, set, remove, entries, createFirstAdminAtomic, exportBackup, importBackup}),
     configurable: false, writable: false
   });
 })();
